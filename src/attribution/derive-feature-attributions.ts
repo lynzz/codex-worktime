@@ -22,11 +22,15 @@ function attributionFor(feature: Feature, commit: CommitEvidence): Omit<FeatureA
 
 export function deriveFeatureAttributions(input: { features: readonly Feature[]; commits: readonly CommitEvidence[] }): FeatureAttribution[] {
   const result: FeatureAttribution[] = [];
-  for (const feature of input.features) {
-    for (const commit of input.commits) {
+  const rank: Record<Evidence, number> = { "explicit-ticket": 7, "planning-reference": 6, branch: 5, "merge-subject": 4, "commit-subject": 3, path: 2, semantic: 1 };
+  for (const commit of input.commits) {
+    const candidates: FeatureAttribution[] = [];
+    for (const feature of input.features) {
       const attribution = attributionFor(feature, commit);
-      if (attribution) result.push({ featureId: feature.id, featureName: feature.name, commitId: commit.id, ...attribution });
+      if (attribution) candidates.push({ featureId: feature.id, featureName: feature.name, commitId: commit.id, ...attribution });
     }
+    const strongest = Math.max(...candidates.map((candidate) => rank[candidate.evidence]), 0);
+    result.push(...candidates.filter((candidate) => rank[candidate.evidence] === strongest));
   }
   return result;
 }
