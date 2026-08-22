@@ -42,7 +42,7 @@ Codex Worktime must report defensible Codex use for one Project Profile without 
 
 ### Reports and delivery
 
-- V1 produces an internal offline HTML report only. Customer-facing reporting is deferred.
+- V1 produces offline HTML in two explicitly selected views. The **internal** view may show normalized provenance identities, event-completeness warnings, feature ids, and delivery commit identities; it still never shows raw paths, prompts, transcript data, tool data, credentials, or Git remotes. The **customer** view is a separate minimum-field projection: Project Profile display name, Asia/Shanghai reporting range, verified Active/Run totals and daily/weekly aggregation, Coverage, Feature display name, delivery-evidence kind, and Confidence. It never shows raw paths, session/turn identities, normalized provenance identities, warning event identities, commit ids, Git remotes, or private session content.
 - Reports use Asia/Shanghai for date boundaries and support date-range, daily, weekly, and Feature aggregation.
 - The V1 delivery form is a local CLI with an optional Codex Skill. It is not a Codex plugin.
 

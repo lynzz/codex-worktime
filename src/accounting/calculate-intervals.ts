@@ -22,6 +22,7 @@ type Totals = { wallClockMinutes: number; parallelMachineMinutes: number; daily:
 type Interval = { start: number; end: number; startEventId: string; endEventId: string; sourceEventIds: string[] };
 
 export type IntervalCalculation = { active: Totals; run: Totals; warnings: Warning[] };
+export type ReportingDateRange = { from: string; to: string };
 
 function minutes(start: number, end: number): number {
   return (end - start) / 60_000;
@@ -89,7 +90,22 @@ function totals(intervals: readonly Interval[]): Totals {
   };
 }
 
-export function calculateIntervals(events: readonly AccountingEvent[]): IntervalCalculation {
+function clipToReportingDateRange(intervals: readonly Interval[], dateRange: ReportingDateRange | undefined): Interval[] {
+  if (!dateRange) return [...intervals];
+  const from = Temporal.PlainDate.from(dateRange.from)
+    .toZonedDateTime({ timeZone: reportTimeZone, plainTime: Temporal.PlainTime.from("00:00") })
+    .epochMilliseconds;
+  const until = Temporal.PlainDate.from(dateRange.to)
+    .add({ days: 1 })
+    .toZonedDateTime({ timeZone: reportTimeZone, plainTime: Temporal.PlainTime.from("00:00") })
+    .epochMilliseconds;
+  if (from >= until) throw new Error("Reporting date range must end on or after its start date");
+  return intervals
+    .map((interval) => ({ ...interval, start: Math.max(interval.start, from), end: Math.min(interval.end, until) }))
+    .filter((interval) => interval.start < interval.end);
+}
+
+export function calculateIntervals(events: readonly AccountingEvent[], options: { dateRange?: ReportingDateRange } = {}): IntervalCalculation {
   const warnings: Warning[] = [];
   const seen = new Set<string>();
   const seenLineageLifecycleIdentities = new Set<string>();
@@ -173,5 +189,9 @@ export function calculateIntervals(events: readonly AccountingEvent[]): Interval
   for (const event of openTurns.values()) warnings.push({ eventId: event.id, reason: "missing-turn-stop" });
   for (const event of openTools.values()) warnings.push({ eventId: event.id, reason: "missing-tool-post" });
   for (const event of pendingToolPosts.values()) warnings.push({ eventId: event.id, reason: "unmatched-tool-post" });
-  return { active: totals(active), run: totals(run), warnings };
+  return {
+    active: totals(clipToReportingDateRange(active, options.dateRange)),
+    run: totals(clipToReportingDateRange(run, options.dateRange)),
+    warnings
+  };
 }

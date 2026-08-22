@@ -111,6 +111,107 @@ describe("generateProjectReport", () => {
     expect(await readFile(htmlPath, "utf8")).toContain("No data");
   });
 
+  it("renders a customer-safe, Asia/Shanghai date-ranged view with verified, inferred, and no-data states", async () => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "codex-worktime-report-"));
+    const htmlPath = join(outputDirectory, "customer-report.html");
+
+    await generateProjectReport({
+      profile,
+      events: [
+        {
+          id: "range-start",
+          occurredAt: "2026-08-21T15:30:00Z",
+          type: "UserPromptSubmit",
+          cwd: "/private/eqa/score",
+          sessionId: "PRIVATE_SESSION_SENTINEL",
+          turnId: "turn"
+        },
+        {
+          id: "range-stop",
+          occurredAt: "2026-08-21T16:30:00Z",
+          type: "Stop",
+          cwd: "/private/eqa/score",
+          sessionId: "PRIVATE_SESSION_SENTINEL",
+          turnId: "turn"
+        }
+      ],
+      coverage: [
+        { date: "2026-08-22", status: "available" },
+        { date: "2026-08-23", status: "no-data" }
+      ],
+      featureAttributions: [
+        { featureId: "billing", featureName: "Billing export", commitId: "INTERNAL_COMMIT_SENTINEL", evidence: "semantic", confidence: "low", suggested: true }
+      ],
+      featureIntervalTotals: [{ featureId: "billing", activeMinutes: 30, runMinutes: 0, evidenceCount: 1, dateRange: { from: "2026-08-22", to: "2026-08-22" } }],
+      view: "customer",
+      dateRange: { from: "2026-08-22", to: "2026-08-22" },
+      databasePath: join(outputDirectory, "analytics.sqlite"),
+      htmlPath,
+      applicationDataDirectory: outputDirectory
+    });
+
+    const html = await readFile(htmlPath, "utf8");
+    expect(html).toContain("Customer report");
+    expect(html).toContain("Verified data");
+    expect(html).toContain("Inferred delivery evidence");
+    expect(html).toContain("No-data and coverage");
+    expect(html).toContain("2026-08-22 through 2026-08-22 (Asia/Shanghai)");
+    expect(html).toContain("30 wall-clock minutes");
+    expect(html).toContain("Billing export");
+    expect(html).toContain("low confidence");
+    expect(html).not.toContain("PRIVATE_SESSION_SENTINEL");
+    expect(html).not.toContain("INTERNAL_COMMIT_SENTINEL");
+    expect(html).not.toContain("sourceEventIds");
+    expect(html).not.toContain("event ");
+    expect(html).not.toContain("sanitized event");
+    expect(html).not.toContain("parallel-machine");
+    expect(html).not.toContain("union segment");
+    expect(html).not.toContain("explicit evidence link");
+  });
+
+  it("does not claim data availability for a date range without matching metadata or intervals", async () => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "codex-worktime-report-"));
+    const htmlPath = join(outputDirectory, "range-without-data.html");
+    const result = await generateProjectReport({
+      profile,
+      events: [{ id: "outside-range", occurredAt: "2026-08-20T01:00:00Z", type: "SessionStart", cwd: "/private/eqa/score" }],
+      dateRange: { from: "2026-08-22", to: "2026-08-22" },
+      databasePath: join(outputDirectory, "analytics.sqlite"),
+      htmlPath,
+      applicationDataDirectory: outputDirectory
+    });
+
+    expect(result.coverage).toBe("no-data");
+    expect(await readFile(htmlPath, "utf8")).toContain("No data");
+  });
+
+  it("requires an Asia/Shanghai date range for a customer report", async () => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "codex-worktime-report-"));
+    await expect(generateProjectReport({
+      profile,
+      events: [],
+      view: "customer",
+      databasePath: join(outputDirectory, "analytics.sqlite"),
+      htmlPath: join(outputDirectory, "customer.html"),
+      applicationDataDirectory: outputDirectory
+    })).rejects.toThrow("Customer reports require an Asia/Shanghai reporting date range");
+  });
+
+  it("preserves unknown coverage for an otherwise empty reporting range", async () => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "codex-worktime-report-"));
+    const result = await generateProjectReport({
+      profile,
+      events: [],
+      coverage: [{ date: "2026-08-22", status: "unknown" }],
+      dateRange: { from: "2026-08-22", to: "2026-08-22" },
+      databasePath: join(outputDirectory, "analytics.sqlite"),
+      htmlPath: join(outputDirectory, "unknown-range.html"),
+      applicationDataDirectory: outputDirectory
+    });
+
+    expect(result.coverage).toBe("unknown");
+  });
+
   it("ignores duplicate and invalid events while preserving valid data", async () => {
     const outputDirectory = await mkdtemp(join(tmpdir(), "codex-worktime-report-"));
     const htmlPath = join(outputDirectory, "report.html");

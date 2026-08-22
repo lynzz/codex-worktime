@@ -8,7 +8,7 @@ import Database from "better-sqlite3";
 import nunjucks from "nunjucks";
 import { z } from "zod";
 
-import { calculateIntervals, type IntervalCalculation } from "../accounting/calculate-intervals.js";
+import { calculateIntervals, type IntervalCalculation, type ReportingDateRange } from "../accounting/calculate-intervals.js";
 
 const safeIdentifierSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/);
 let temporaryOutputSequence = 0;
@@ -61,6 +61,19 @@ const coverageEntrySchema = z.object({
   status: z.enum(["available", "no-data", "unknown"])
 });
 
+const reportingDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
+  try {
+    Temporal.PlainDate.from(value);
+    return true;
+  } catch {
+    return false;
+  }
+}, "Invalid reporting date");
+const dateRangeSchema = z.object({ from: reportingDateSchema, to: reportingDateSchema }).refine(
+  (range) => range.from <= range.to,
+  "Reporting date range must end on or after its start date"
+);
+
 const featureAttributionSchema = z.object({
   featureId: safeIdentifierSchema,
   featureName: z.string().trim().min(1).max(120),
@@ -73,7 +86,8 @@ const featureIntervalTotalSchema = z.object({
   featureId: safeIdentifierSchema,
   activeMinutes: z.number().nonnegative(),
   runMinutes: z.number().nonnegative(),
-  evidenceCount: z.number().int().positive()
+  evidenceCount: z.number().int().positive(),
+  dateRange: dateRangeSchema.optional()
 });
 
 const inputSchema = z.object({
@@ -82,6 +96,8 @@ const inputSchema = z.object({
   coverage: z.array(coverageEntrySchema).default([]),
   featureAttributions: z.array(featureAttributionSchema).default([]),
   featureIntervalTotals: z.array(featureIntervalTotalSchema).default([]),
+  view: z.enum(["internal", "customer"]).default("internal"),
+  dateRange: dateRangeSchema.optional(),
   databasePath: z.string().min(1),
   htmlPath: z.string().min(1)
 });
@@ -92,6 +108,8 @@ export type GenerateProjectReportInput = {
   coverage?: unknown;
   featureAttributions?: unknown;
   featureIntervalTotals?: unknown;
+  view?: "internal" | "customer";
+  dateRange?: ReportingDateRange;
   databasePath: string;
   htmlPath: string;
   applicationDataDirectory?: string;
@@ -99,7 +117,7 @@ export type GenerateProjectReportInput = {
 
 export type ProjectReportResult = {
   matchedEventCount: number;
-  coverage: "available" | "no-data";
+  coverage: "available" | "no-data" | "unknown";
   htmlPath: string;
 };
 
@@ -146,37 +164,44 @@ const reportTemplate = `<!doctype html>
   <body>
     <main>
       <h1>{{ displayName }}</h1>
+      <p>{{ viewLabel }}</p>
       <p class="status">{{ statusLabel }}</p>
       <p>{{ summary }}</p>
-      <h2>Verified intervals</h2>
-      <p>Active Interval: {{ accounting.active.wallClockMinutes }} wall-clock minutes ({{ accounting.active.parallelMachineMinutes }} parallel-machine minutes).</p>
-      <p>Run Interval: {{ accounting.run.wallClockMinutes }} wall-clock minutes ({{ accounting.run.parallelMachineMinutes }} parallel-machine minutes).</p>
+      {% if dateRangeLabel %}<p>Reporting range: {{ dateRangeLabel }} (Asia/Shanghai)</p>{% endif %}
+      <h2>Verified data</h2>
+      <h3>Verified intervals</h3>
+      <p>Active Interval: {{ accounting.active.wallClockMinutes }} wall-clock minutes{% if view === "internal" %} ({{ accounting.active.parallelMachineMinutes }} parallel-machine minutes){% endif %}.</p>
+      <p>Run Interval: {{ accounting.run.wallClockMinutes }} wall-clock minutes{% if view === "internal" %} ({{ accounting.run.parallelMachineMinutes }} parallel-machine minutes){% endif %}.</p>
+      <p>No inferred human-time metric is included in this V1 report.</p>
       <h3>Daily verified Active Interval (Asia/Shanghai)</h3>
       <ul>{% for entry in accounting.active.daily %}<li>{{ entry.date }}: {{ entry.minutes }} minutes</li>{% endfor %}</ul>
       <h3>Weekly verified Active Interval (Asia/Shanghai)</h3>
       <ul>{% for entry in accounting.active.weekly %}<li>{{ entry.week }}: {{ entry.minutes }} minutes</li>{% endfor %}</ul>
-      <p>{{ accounting.active.intervals.length }} Active Interval union segment{% if accounting.active.intervals.length !== 1 %}s{% endif %}; each is traceable to its retained boundary event identities.</p>
-      <ul>{% for interval in accounting.active.intervals %}<li>{{ interval.start }}–{{ interval.end }}: {{ interval.sourceEventIds | join(', ') }}</li>{% endfor %}</ul>
-      <p>Active and Run totals are wall-clock unions; overlapping segments are deduplicated rather than added.</p>
-      <p>{{ accounting.run.intervals.length }} Run Interval union segment{% if accounting.run.intervals.length !== 1 %}s{% endif %}.</p>
-      <ul>{% for interval in accounting.run.intervals %}<li>{{ interval.start }}–{{ interval.end }}: {{ interval.sourceEventIds | join(', ') }}</li>{% endfor %}</ul>
-      {% if coverage.length %}
-        <h2>Coverage</h2>
-        <ul>{% for entry in coverage %}<li>{{ entry.date }}: {{ entry.label }}</li>{% endfor %}</ul>
+      {% if view === "internal" %}
+        <p>{{ accounting.active.intervals.length }} Active Interval union segment{% if accounting.active.intervals.length !== 1 %}s{% endif %}; each is traceable to its retained boundary event identities.</p>
+        <ul>{% for interval in accounting.active.intervals %}<li>{{ interval.start }}–{{ interval.end }}: {{ interval.sourceEventIds | join(', ') }}</li>{% endfor %}</ul>
       {% endif %}
+      {% if view === "internal" %}
+        <p>Active and Run totals are wall-clock unions; overlapping segments are deduplicated rather than added.</p>
+        <p>{{ accounting.run.intervals.length }} Run Interval union segment{% if accounting.run.intervals.length !== 1 %}s{% endif %}.</p>
+        <ul>{% for interval in accounting.run.intervals %}<li>{{ interval.start }}–{{ interval.end }}: {{ interval.sourceEventIds | join(', ') }}</li>{% endfor %}</ul>
+      {% endif %}
+      <h2>No-data and coverage</h2>
+      {% if coverage.length %}<ul>{% for entry in coverage %}<li>{{ entry.date }}: {{ entry.label }}</li>{% endfor %}</ul>{% else %}<p>No coverage entries were retained; this is not a zero-time claim.</p>{% endif %}
       {% if featureAttributions.length %}
-        <h2>Feature delivery evidence</h2>
-        <ul>{% for attribution in featureAttributions %}<li>{{ attribution.featureName }}: {{ attribution.evidence }} ({{ attribution.confidence }}){% if attribution.suggested %} — Low-confidence suggestion{% endif %}</li>{% endfor %}</ul>
+        <h2>Inferred delivery evidence</h2>
+        <ul>{% for attribution in featureAttributions %}<li>{{ attribution.featureName }}: {{ attribution.evidence }} ({{ attribution.confidence }} confidence){% if attribution.suggested %} — Low-confidence suggestion{% endif %}{% if view === "internal" %} [{{ attribution.commitId }}]{% endif %}</li>{% endfor %}</ul>
       {% endif %}
       {% if featureIntervalTotals.length %}
         <h2>Feature-linked verified intervals</h2>
-        <ul>{% for total in featureIntervalTotals %}<li>{{ total.featureId }}: {{ total.activeMinutes }} verified Active minutes; {{ total.runMinutes }} verified Run minutes ({{ total.evidenceCount }} explicit evidence link{% if total.evidenceCount !== 1 %}s{% endif %}).</li>{% endfor %}</ul>
+        <ul>{% for total in featureIntervalTotals %}<li>{{ total.displayName }}: {{ total.activeMinutes }} verified Active minutes; {{ total.runMinutes }} verified Run minutes{% if view === "internal" %} ({{ total.evidenceCount }} explicit evidence link{% if total.evidenceCount !== 1 %}s{% endif %}){% endif %}.</li>{% endfor %}</ul>
       {% endif %}
-      {% if warnings.length %}
+      {% if featureTotalsUnavailableForRange %}<p>Feature-linked verified intervals were not supplied with evidence for this reporting range; no feature duration is claimed.</p>{% endif %}
+      {% if warnings.length and view === "internal" %}
         <p>{{ warnings.length }} data-quality warning{% if warnings.length !== 1 %}s{% endif %}.</p>
         <ul>{% for warning in warnings %}<li>{{ warning.reason }} (event {{ warning.eventHash }})</li>{% endfor %}</ul>
       {% endif %}
-      {% if legacyUnscopedWarningCount %}
+      {% if legacyUnscopedWarningCount and view === "internal" %}
         <p>{{ legacyUnscopedWarningCount }} global legacy warning{% if legacyUnscopedWarningCount !== 1 %}s{% endif %} could not be attributed to a Project Profile.</p>
       {% endif %}
     </main>
@@ -520,25 +545,39 @@ function renderReport(
   legacyUnscopedWarningCount: number,
   accounting: IntervalCalculation,
   featureAttributions: readonly z.output<typeof featureAttributionSchema>[],
-  featureIntervalTotals: readonly z.output<typeof featureIntervalTotalSchema>[]
+  featureIntervalTotals: readonly z.output<typeof featureIntervalTotalSchema>[],
+  view: "internal" | "customer",
+  dateRange: ReportingDateRange | undefined
 ): string {
-  const hasData = matchedEventCount > 0;
+  const hasData = matchedEventCount > 0 || accounting.active.wallClockMinutes > 0 || accounting.run.wallClockMinutes > 0;
+  const namesByFeatureId = new Map(featureAttributions.map((attribution) => [attribution.featureId, attribution.featureName]));
   return nunjucks.renderString(reportTemplate, {
     displayName,
     statusColor: hasData ? "#0f7b3e" : "#805b00",
     statusLabel: hasData ? "Data available" : "No data",
-    summary: hasData
-      ? `${matchedEventCount} sanitized event${matchedEventCount === 1 ? "" : "s"} matched this Project Profile.`
-      : "No matching retained event metadata is available for this Project Profile.",
+    view,
+    viewLabel: view === "internal" ? "Internal report" : "Customer report",
+    summary: view === "customer"
+      ? "This customer view contains only approved aggregated report fields."
+      : hasData
+        ? `${matchedEventCount} sanitized event${matchedEventCount === 1 ? "" : "s"} matched this Project Profile.`
+        : "No matching retained event metadata is available for this Project Profile.",
     warnings,
     accounting,
     legacyUnscopedWarningCount,
-    coverage: coverage.map((entry) => ({
+    dateRangeLabel: dateRange ? `${dateRange.from} through ${dateRange.to}` : undefined,
+    coverage: coverage.filter((entry) => !dateRange || (entry.date >= dateRange.from && entry.date <= dateRange.to)).map((entry) => ({
       ...entry,
-      label: entry.status === "no-data" ? "no data" : entry.status
+      label: entry.status === "no-data" ? "no data — not zero time" : entry.status === "unknown" ? "unknown — no data claim" : "available"
     })),
     featureAttributions,
-    featureIntervalTotals
+    featureIntervalTotals: featureIntervalTotals
+      .filter((total) => !dateRange || (total.dateRange?.from === dateRange.from && total.dateRange.to === dateRange.to))
+      .filter((total) => view === "internal" || namesByFeatureId.has(total.featureId))
+      .map((total) => ({ ...total, displayName: view === "customer" ? namesByFeatureId.get(total.featureId) : total.featureId })),
+    featureTotalsUnavailableForRange: Boolean(dateRange && featureIntervalTotals.length && !featureIntervalTotals.some(
+      (total) => total.dateRange?.from === dateRange.from && total.dateRange.to === dateRange.to
+    ))
   });
 }
 
@@ -550,7 +589,10 @@ async function writeOfflineReport(htmlPath: string, contents: string): Promise<v
 }
 
 export async function generateProjectReport(input: GenerateProjectReportInput): Promise<ProjectReportResult> {
-  const { profile, events, coverage, featureAttributions, featureIntervalTotals, databasePath, htmlPath } = inputSchema.parse(input);
+  const { profile, events, coverage, featureAttributions, featureIntervalTotals, view, dateRange, databasePath, htmlPath } = inputSchema.parse(input);
+  if (view === "customer" && !dateRange) {
+    throw new Error("Customer reports require an Asia/Shanghai reporting date range");
+  }
   const dataDirectory = resolve(input.applicationDataDirectory ?? applicationDataDirectory());
   ensureStorageOutsideProjectRoots(databasePath, dataDirectory, profile.roots);
   const normalized = normalizeMatchingEvents(events, profile.roots);
@@ -576,20 +618,29 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
         toolUseId: event.toolUseHash ?? undefined,
         agentId: event.agentHash ?? undefined,
         parentSessionId: event.lineageHash ?? undefined
-      })));
+      })), { dateRange });
       const sequenceWarnings = accounting.warnings.map((warning) => ({ eventHash: warning.eventId, reason: warning.reason }));
       replaceSequenceWarnings(database, profile.id, sequenceWarnings);
       const persistedInvalidTimestampWarnings = readPersistedInvalidTimestampWarnings(database, profile.id);
       const legacyUnscopedWarningCount = countLegacyUnscopedWarnings(database);
-      const storedEventCount = database
-        .prepare("SELECT COUNT(*) AS count FROM events WHERE project_id = ?")
-        .get(profile.id) as { count: number };
       const storedCoverage = database
         .prepare("SELECT report_date AS date, status FROM coverage WHERE project_id = ? ORDER BY report_date")
         .all(profile.id) as CoverageEntry[];
-      const matchedEventCount = storedEventCount.count;
+      const matchedEventCount = dateRange
+        ? storedEvents.filter((event) => {
+          const date = Temporal.Instant.from(event.occurredAt).toZonedDateTimeISO("Asia/Shanghai").toPlainDate().toString();
+          return date >= dateRange.from && date <= dateRange.to;
+        }).length
+        : storedEvents.length;
       const resolvedCoverage = storedCoverage;
-      const coverageStatus = matchedEventCount > 0 ? "available" : "no-data";
+      const coverageForRange = dateRange
+        ? storedCoverage.filter((entry) => entry.date >= dateRange.from && entry.date <= dateRange.to)
+        : storedCoverage;
+      const coverageStatus = matchedEventCount > 0 || accounting.active.wallClockMinutes > 0 || accounting.run.wallClockMinutes > 0
+        ? "available"
+        : coverageForRange.some((entry) => entry.status === "unknown")
+          ? "unknown"
+          : "no-data";
       const renderedReport = renderReport(
         profile.displayName,
         matchedEventCount,
@@ -598,7 +649,9 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
         legacyUnscopedWarningCount,
         accounting,
         featureAttributions,
-        featureIntervalTotals
+        featureIntervalTotals,
+        view,
+        dateRange
       );
       database.exec("COMMIT");
       transactionStarted = false;
