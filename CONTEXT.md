@@ -12,7 +12,7 @@ Codex Worktime is a local tool for creating auditable reports of Codex usage for
 - **Feature**: A delivered product capability. It is not a Git commit scope.
 - **Attribution Evidence**: The recorded evidence used to associate a Feature with delivery work.
 - **Confidence**: The high, medium, or low strength of an Attribution Evidence claim.
-- **Coverage**: Whether the tool has enough retained metadata to report a period. Missing Coverage is “no data”, never zero hours.
+- **Coverage**: Whether the tool has enough retained metadata to report a period. `available` means matching metadata was observed; `no-data` means a readable source covered the date but had no matching project metadata; `unknown` means the available sources cannot establish the date's coverage. Neither `no-data` nor `unknown` means zero hours.
 - **Event completeness**: Whether an individual event sequence has the boundaries required to create a verified interval. It is separate from period-level Coverage.
 
 ## V1 boundary

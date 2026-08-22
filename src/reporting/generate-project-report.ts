@@ -45,12 +45,20 @@ const eventSchema = z.object({
   ]),
   cwd: z.string().min(1),
   sessionId: z.string().min(1).optional(),
-  turnId: z.string().min(1).optional()
+  turnId: z.string().min(1).optional(),
+  parentSessionId: z.string().min(1).optional(),
+  source: z.enum(["fixture", "history", "hook"]).default("fixture")
+});
+
+const coverageEntrySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  status: z.enum(["available", "no-data", "unknown"])
 });
 
 const inputSchema = z.object({
   profile: projectProfileSchema,
   events: z.array(eventSchema),
+  coverage: z.array(coverageEntrySchema).default([]),
   databasePath: z.string().min(1),
   htmlPath: z.string().min(1)
 });
@@ -58,6 +66,7 @@ const inputSchema = z.object({
 export type GenerateProjectReportInput = {
   profile: unknown;
   events: unknown;
+  coverage?: unknown;
   databasePath: string;
   htmlPath: string;
   applicationDataDirectory?: string;
@@ -69,6 +78,8 @@ export type ProjectReportResult = {
   htmlPath: string;
 };
 
+export type CoverageEntry = z.output<typeof coverageEntrySchema>;
+
 type Root = z.output<typeof projectProfileSchema>["roots"][number];
 
 type StoredEvent = {
@@ -79,6 +90,8 @@ type StoredEvent = {
   eventType: string;
   sessionHash: string | null;
   turnHash: string | null;
+  lineageHash: string | null;
+  source: "fixture" | "history" | "hook";
 };
 
 type EventNormalization = {
@@ -108,6 +121,10 @@ const reportTemplate = `<!doctype html>
       <h1>{{ displayName }}</h1>
       <p class="status">{{ statusLabel }}</p>
       <p>{{ summary }}</p>
+      {% if coverage.length %}
+        <h2>Coverage</h2>
+        <ul>{% for entry in coverage %}<li>{{ entry.date }}: {{ entry.label }}</li>{% endfor %}</ul>
+      {% endif %}
       {% if warnings.length %}
         <p>{{ warnings.length }} data-quality warning{% if warnings.length !== 1 %}s{% endif %}.</p>
         <ul>{% for warning in warnings %}<li>{{ warning.reason }} (event {{ warning.eventHash }})</li>{% endfor %}</ul>
@@ -164,7 +181,9 @@ function normalizeMatchingEvents(
         occurredAt: Temporal.Instant.from(event.occurredAt).toString(),
         eventType: event.type,
         sessionHash: event.sessionId ? hashIdentifier(event.sessionId) : null,
-        turnHash: event.turnId ? hashIdentifier(event.turnId) : null
+        turnHash: event.turnId ? hashIdentifier(event.turnId) : null,
+        lineageHash: event.parentSessionId ? hashIdentifier(event.parentSessionId) : null,
+        source: event.source
       });
     } catch {
       addWarning(eventHash, "invalid-timestamp");
@@ -256,7 +275,9 @@ function createEventStore(databasePath: string): Database.Database {
       occurred_at TEXT NOT NULL,
       event_type TEXT NOT NULL,
       session_hash TEXT,
-      turn_hash TEXT
+      turn_hash TEXT,
+      lineage_hash TEXT,
+      source TEXT NOT NULL DEFAULT 'fixture'
     )
     ;
     CREATE TABLE IF NOT EXISTS data_quality_warnings (
@@ -264,7 +285,21 @@ function createEventStore(databasePath: string): Database.Database {
       reason TEXT NOT NULL,
       PRIMARY KEY (event_hash, reason)
     )
+    ;
+    CREATE TABLE IF NOT EXISTS coverage (
+      project_id TEXT NOT NULL,
+      report_date TEXT NOT NULL,
+      status TEXT NOT NULL,
+      PRIMARY KEY (project_id, report_date)
+    )
   `);
+  const columns = database.prepare("PRAGMA table_info(events)").all() as { name: string }[];
+  if (!columns.some((column) => column.name === "lineage_hash")) {
+    database.exec("ALTER TABLE events ADD COLUMN lineage_hash TEXT");
+  }
+  if (!columns.some((column) => column.name === "source")) {
+    database.exec("ALTER TABLE events ADD COLUMN source TEXT NOT NULL DEFAULT 'fixture'");
+  }
   return database;
 }
 
@@ -272,13 +307,14 @@ function storeEvents(
   database: Database.Database,
   projectId: string,
   events: readonly StoredEvent[],
-  warnings: readonly DataQualityWarning[]
+  warnings: readonly DataQualityWarning[],
+  coverage: readonly CoverageEntry[]
 ): void {
   const insert = database.prepare(`
     INSERT OR IGNORE INTO events (
-      event_hash, project_id, root_id, occurred_at, event_type, session_hash, turn_hash
+      event_hash, project_id, root_id, occurred_at, event_type, session_hash, turn_hash, lineage_hash, source
     ) VALUES (
-      @eventHash, @projectId, @rootId, @occurredAt, @eventType, @sessionHash, @turnHash
+      @eventHash, @projectId, @rootId, @occurredAt, @eventType, @sessionHash, @turnHash, @lineageHash, @source
     )
   `);
 
@@ -298,12 +334,24 @@ function storeEvents(
     }
   });
   insertWarnings(warnings);
+
+  const insertCoverage = database.prepare(`
+    INSERT INTO coverage (project_id, report_date, status) VALUES (@projectId, @date, @status)
+    ON CONFLICT(project_id, report_date) DO UPDATE SET status = excluded.status
+  `);
+  const insertCoverageEntries = database.transaction((items: readonly CoverageEntry[]) => {
+    for (const entry of items) {
+      insertCoverage.run({ ...entry, projectId });
+    }
+  });
+  insertCoverageEntries(coverage);
 }
 
 function renderReport(
   displayName: string,
   matchedEventCount: number,
-  warnings: readonly DataQualityWarning[]
+  warnings: readonly DataQualityWarning[],
+  coverage: readonly CoverageEntry[]
 ): string {
   const hasData = matchedEventCount > 0;
   return nunjucks.renderString(reportTemplate, {
@@ -313,12 +361,16 @@ function renderReport(
     summary: hasData
       ? `${matchedEventCount} sanitized event${matchedEventCount === 1 ? "" : "s"} matched this Project Profile.`
       : "No matching retained event metadata is available for this Project Profile.",
-    warnings
+    warnings,
+    coverage: coverage.map((entry) => ({
+      ...entry,
+      label: entry.status === "no-data" ? "no data" : entry.status
+    }))
   });
 }
 
 export async function generateProjectReport(input: GenerateProjectReportInput): Promise<ProjectReportResult> {
-  const { profile, events, databasePath, htmlPath } = inputSchema.parse(input);
+  const { profile, events, coverage, databasePath, htmlPath } = inputSchema.parse(input);
   const dataDirectory = resolve(input.applicationDataDirectory ?? applicationDataDirectory());
   ensureStorageOutsideProjectRoots(databasePath, dataDirectory, profile.roots);
   const normalized = normalizeMatchingEvents(events, profile.roots);
@@ -326,15 +378,24 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
   await mkdir(dirname(databasePath), { recursive: true });
   const database = createEventStore(databasePath);
   try {
-    storeEvents(database, profile.id, normalized.events, normalized.warnings);
+    storeEvents(database, profile.id, normalized.events, normalized.warnings, coverage);
+    const storedEventCount = database
+      .prepare("SELECT COUNT(*) AS count FROM events WHERE project_id = ?")
+      .get(profile.id) as { count: number };
+    const storedCoverage = database
+      .prepare("SELECT report_date AS date, status FROM coverage WHERE project_id = ? ORDER BY report_date")
+      .all(profile.id) as CoverageEntry[];
+    const matchedEventCount = storedEventCount.count;
+    const resolvedCoverage = storedCoverage;
+    const coverageStatus = matchedEventCount > 0 ? "available" : "no-data";
+    await mkdir(dirname(htmlPath), { recursive: true });
+    await writeFile(
+      htmlPath,
+      renderReport(profile.displayName, matchedEventCount, normalized.warnings, resolvedCoverage),
+      "utf8"
+    );
+    return { matchedEventCount, coverage: coverageStatus, htmlPath };
   } finally {
     database.close();
   }
-
-  const matchedEventCount = normalized.events.length;
-  const coverage = matchedEventCount > 0 ? "available" : "no-data";
-  await mkdir(dirname(htmlPath), { recursive: true });
-  await writeFile(htmlPath, renderReport(profile.displayName, matchedEventCount, normalized.warnings), "utf8");
-
-  return { matchedEventCount, coverage, htmlPath };
 }

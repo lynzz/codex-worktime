@@ -48,6 +48,6 @@ Codex Worktime must report defensible Codex use for one Project Profile without 
 
 ## Consequences
 
-- The report deliberately under-claims: unavailable retained history is visible as Missing Coverage, while incomplete Turn and tool event sequences are visible as Event completeness/data-quality warnings rather than estimates.
+- The report deliberately under-claims: historical Coverage is `no-data` when a readable source covers a date without matching project metadata, and `unknown` when retained sources cannot establish that date's coverage. Neither status estimates zero time. Incomplete Turn and tool event sequences are visible as Event completeness/data-quality warnings rather than estimates.
 - A client cannot interpret the primary total as human effort, token consumption, or a complete measure of all model computation.
 - Later work may add customer views, manual time, token accounting, or legacy-root inclusion only through an explicit policy change that preserves the separate metrics.
