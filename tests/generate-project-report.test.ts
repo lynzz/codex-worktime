@@ -206,4 +206,78 @@ describe("generateProjectReport", () => {
     expect(html).toContain("missing-turn-stop");
     expect(html).not.toContain("session-1");
   });
+
+  it("matches tool lifecycle events by opaque tool invocation identity", async () => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "codex-worktime-report-"));
+    const htmlPath = join(outputDirectory, "report.html");
+
+    await generateProjectReport({
+      profile,
+      events: [
+        {
+          id: "pre-one",
+          occurredAt: "2026-08-22T01:00:00Z",
+          type: "PreToolUse",
+          cwd: "/private/eqa/score",
+          sessionId: "session-1",
+          turnId: "turn-1",
+          toolUseId: "tool-one"
+        },
+        {
+          id: "post-two",
+          occurredAt: "2026-08-22T01:01:00Z",
+          type: "PostToolUse",
+          cwd: "/private/eqa/score",
+          sessionId: "session-1",
+          turnId: "turn-1",
+          toolUseId: "tool-two"
+        }
+      ],
+      databasePath: join(outputDirectory, "analytics.sqlite"),
+      htmlPath,
+      applicationDataDirectory: outputDirectory
+    });
+
+    const html = await readFile(htmlPath, "utf8");
+    expect(html).toContain("unmatched-tool-post");
+    expect(html).toContain("missing-tool-post");
+  });
+
+  it("serializes concurrent refreshes of the shared event store and offline report", async () => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "codex-worktime-report-"));
+    const databasePath = join(outputDirectory, "analytics.sqlite");
+    const htmlPath = join(outputDirectory, "report.html");
+    const sharedInput = { profile, databasePath, htmlPath, applicationDataDirectory: outputDirectory };
+
+    await Promise.all([
+      generateProjectReport({
+        ...sharedInput,
+        events: [{ id: "event-one", occurredAt: "2026-08-22T01:00:00Z", type: "SessionStart", cwd: "/private/eqa/score" }]
+      }),
+      generateProjectReport({
+        ...sharedInput,
+        events: [{ id: "event-two", occurredAt: "2026-08-22T01:01:00Z", type: "SessionEnd", cwd: "/private/eqa/score" }]
+      })
+    ]);
+
+    expect(await readFile(htmlPath, "utf8")).toContain("2 sanitized events");
+  });
+
+  it("keeps stored invalid-timestamp warnings visible after a later refresh", async () => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "codex-worktime-report-"));
+    const databasePath = join(outputDirectory, "analytics.sqlite");
+    const htmlPath = join(outputDirectory, "report.html");
+    const sharedInput = { profile, databasePath, htmlPath, applicationDataDirectory: outputDirectory };
+
+    await generateProjectReport({
+      ...sharedInput,
+      events: [{ id: "bad-time", occurredAt: "invalid", type: "Stop", cwd: "/private/eqa/score" }]
+    });
+    await generateProjectReport({
+      ...sharedInput,
+      events: [{ id: "valid", occurredAt: "2026-08-22T01:00:00Z", type: "SessionStart", cwd: "/private/eqa/score" }]
+    });
+
+    expect(await readFile(htmlPath, "utf8")).toContain("invalid-timestamp");
+  });
 });

@@ -1,0 +1,15 @@
+{
+  "description": "Incrementally record privacy-safe Codex lifecycle metadata for codex-worktime.",
+  "hooks": {
+    "SessionStart": [{ "hooks": [{ "type": "command", "command": "codex-worktime hook --quiet --profile \"$CODEX_WORKTIME_PROFILE\" --database \"$CODEX_WORKTIME_DATABASE\" --output \"$CODEX_WORKTIME_REPORT\"", "timeout": 15 }] }],
+    "UserPromptSubmit": [{ "hooks": [{ "type": "command", "command": "codex-worktime hook --quiet --profile \"$CODEX_WORKTIME_PROFILE\" --database \"$CODEX_WORKTIME_DATABASE\" --output \"$CODEX_WORKTIME_REPORT\"", "timeout": 15 }] }],
+    "PreToolUse": [{ "hooks": [{ "type": "command", "command": "codex-worktime hook --quiet --profile \"$CODEX_WORKTIME_PROFILE\" --database \"$CODEX_WORKTIME_DATABASE\" --output \"$CODEX_WORKTIME_REPORT\"", "timeout": 15 }] }],
+    "PostToolUse": [{ "hooks": [{ "type": "command", "command": "codex-worktime hook --quiet --profile \"$CODEX_WORKTIME_PROFILE\" --database \"$CODEX_WORKTIME_DATABASE\" --output \"$CODEX_WORKTIME_REPORT\"", "timeout": 15 }] }],
+    "PreCompact": [{ "hooks": [{ "type": "command", "command": "codex-worktime hook --quiet --profile \"$CODEX_WORKTIME_PROFILE\" --database \"$CODEX_WORKTIME_DATABASE\" --output \"$CODEX_WORKTIME_REPORT\"", "timeout": 15 }] }],
+    "PostCompact": [{ "hooks": [{ "type": "command", "command": "codex-worktime hook --quiet --profile \"$CODEX_WORKTIME_PROFILE\" --database \"$CODEX_WORKTIME_DATABASE\" --output \"$CODEX_WORKTIME_REPORT\"", "timeout": 15 }] }],
+    "Stop": [{ "hooks": [{ "type": "command", "command": "codex-worktime hook --quiet --profile \"$CODEX_WORKTIME_PROFILE\" --database \"$CODEX_WORKTIME_DATABASE\" --output \"$CODEX_WORKTIME_REPORT\"", "timeout": 15 }] }],
+    "SessionEnd": [{ "hooks": [{ "type": "command", "command": "codex-worktime hook --quiet --profile \"$CODEX_WORKTIME_PROFILE\" --database \"$CODEX_WORKTIME_DATABASE\" --output \"$CODEX_WORKTIME_REPORT\"", "timeout": 3 }] }],
+    "SubagentStart": [{ "hooks": [{ "type": "command", "command": "codex-worktime hook --quiet --profile \"$CODEX_WORKTIME_PROFILE\" --database \"$CODEX_WORKTIME_DATABASE\" --output \"$CODEX_WORKTIME_REPORT\"", "timeout": 15 }] }],
+    "SubagentStop": [{ "hooks": [{ "type": "command", "command": "codex-worktime hook --quiet --profile \"$CODEX_WORKTIME_PROFILE\" --database \"$CODEX_WORKTIME_DATABASE\" --output \"$CODEX_WORKTIME_REPORT\"", "timeout": 15 }] }]
+  }
+}

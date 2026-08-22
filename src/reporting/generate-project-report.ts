@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import { homedir, platform } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
@@ -9,6 +9,8 @@ import nunjucks from "nunjucks";
 import { z } from "zod";
 
 const safeIdentifierSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/);
+let temporaryOutputSequence = 0;
+let pendingInProcessRefresh = Promise.resolve();
 
 const projectProfileSchema = z.object({
   id: safeIdentifierSchema,
@@ -46,6 +48,8 @@ const eventSchema = z.object({
   cwd: z.string().min(1),
   sessionId: z.string().min(1).optional(),
   turnId: z.string().min(1).optional(),
+  toolUseId: z.string().min(1).optional(),
+  agentId: z.string().min(1).optional(),
   parentSessionId: z.string().min(1).optional(),
   source: z.enum(["fixture", "history", "hook"]).default("fixture")
 });
@@ -90,6 +94,8 @@ type StoredEvent = {
   eventType: string;
   sessionHash: string | null;
   turnHash: string | null;
+  toolUseHash: string | null;
+  agentHash: string | null;
   lineageHash: string | null;
   source: "fixture" | "history" | "hook";
 };
@@ -128,6 +134,9 @@ const reportTemplate = `<!doctype html>
       {% if warnings.length %}
         <p>{{ warnings.length }} data-quality warning{% if warnings.length !== 1 %}s{% endif %}.</p>
         <ul>{% for warning in warnings %}<li>{{ warning.reason }} (event {{ warning.eventHash }})</li>{% endfor %}</ul>
+      {% endif %}
+      {% if legacyUnscopedWarningCount %}
+        <p>{{ legacyUnscopedWarningCount }} global legacy warning{% if legacyUnscopedWarningCount !== 1 %}s{% endif %} could not be attributed to a Project Profile.</p>
       {% endif %}
     </main>
   </body>
@@ -182,6 +191,8 @@ function normalizeMatchingEvents(
         eventType: event.type,
         sessionHash: event.sessionId ? hashIdentifier(event.sessionId) : null,
         turnHash: event.turnId ? hashIdentifier(event.turnId) : null,
+        toolUseHash: event.toolUseId ? hashIdentifier(event.toolUseId) : null,
+        agentHash: event.agentId ? hashIdentifier(event.agentId) : null,
         lineageHash: event.parentSessionId ? hashIdentifier(event.parentSessionId) : null,
         source: event.source
       });
@@ -190,8 +201,21 @@ function normalizeMatchingEvents(
     }
   }
 
+  return { events: normalizedEvents, warnings };
+}
+
+function calculateSequenceWarnings(events: readonly StoredEvent[]): DataQualityWarning[] {
+  const warnings: DataQualityWarning[] = [];
+  const warningKeys = new Set<string>();
+  const addWarning = (eventHash: string, reason: DataQualityWarning["reason"]): void => {
+    const key = `${eventHash}:${reason}`;
+    if (!warningKeys.has(key)) {
+      warningKeys.add(key);
+      warnings.push({ eventHash, reason });
+    }
+  };
   const eventsBySequence = new Map<string, StoredEvent[]>();
-  for (const event of normalizedEvents) {
+  for (const event of events) {
     const sequenceKey = event.sessionHash ?? event.turnHash ?? event.eventHash;
     const sequenceEvents = eventsBySequence.get(sequenceKey) ?? [];
     sequenceEvents.push(event);
@@ -203,7 +227,8 @@ function normalizeMatchingEvents(
       (left, right) => left.occurredAt.localeCompare(right.occurredAt) || left.sequence - right.sequence
     );
     let openTurn: StoredEvent | undefined;
-    const openToolRuns: StoredEvent[] = [];
+    const openToolRunsById = new Map<string, StoredEvent>();
+    const openToolRunsWithoutId: StoredEvent[] = [];
 
     for (const event of orderedEvents) {
       if (event.eventType === "UserPromptSubmit") {
@@ -214,10 +239,19 @@ function normalizeMatchingEvents(
       } else if (event.eventType === "Stop") {
         openTurn = undefined;
       } else if (event.eventType === "PreToolUse") {
-        openToolRuns.push(event);
+        if (event.toolUseHash) {
+          openToolRunsById.set(event.toolUseHash, event);
+        } else {
+          openToolRunsWithoutId.push(event);
+        }
       } else if (event.eventType === "PostToolUse") {
-        if (openToolRuns.shift() === undefined) {
+        const matchingRun = event.toolUseHash
+          ? openToolRunsById.get(event.toolUseHash)
+          : openToolRunsWithoutId.shift();
+        if (matchingRun === undefined) {
           addWarning(event.eventHash, "unmatched-tool-post");
+        } else if (event.toolUseHash) {
+          openToolRunsById.delete(event.toolUseHash);
         }
       }
     }
@@ -225,12 +259,12 @@ function normalizeMatchingEvents(
     if (openTurn) {
       addWarning(openTurn.eventHash, "missing-turn-stop");
     }
-    for (const event of openToolRuns) {
+    for (const event of [...openToolRunsById.values(), ...openToolRunsWithoutId]) {
       addWarning(event.eventHash, "missing-tool-post");
     }
   }
 
-  return { events: normalizedEvents, warnings };
+  return warnings;
 }
 
 function isWithinDirectory(path: string, directory: string): boolean {
@@ -265,8 +299,27 @@ function ensureStorageOutsideProjectRoots(
   }
 }
 
-function createEventStore(databasePath: string): Database.Database {
+async function serializeInProcessRefresh<T>(operation: () => Promise<T>): Promise<T> {
+  const previousRefresh = pendingInProcessRefresh;
+  let releaseCurrentRefresh: () => void = () => undefined;
+  pendingInProcessRefresh = new Promise<void>((resolveRefresh) => {
+    releaseCurrentRefresh = resolveRefresh;
+  });
+  await previousRefresh;
+  try {
+    return await operation();
+  } finally {
+    releaseCurrentRefresh();
+  }
+}
+
+function openEventStore(databasePath: string): Database.Database {
   const database = new Database(databasePath);
+  database.pragma("busy_timeout = 5000");
+  return database;
+}
+
+function initializeEventStore(database: Database.Database): void {
   database.exec(`
     CREATE TABLE IF NOT EXISTS events (
       event_hash TEXT PRIMARY KEY,
@@ -276,12 +329,15 @@ function createEventStore(databasePath: string): Database.Database {
       event_type TEXT NOT NULL,
       session_hash TEXT,
       turn_hash TEXT,
+      tool_use_hash TEXT,
+      agent_hash TEXT,
       lineage_hash TEXT,
       source TEXT NOT NULL DEFAULT 'fixture'
     )
     ;
     CREATE TABLE IF NOT EXISTS data_quality_warnings (
       event_hash TEXT NOT NULL,
+      project_id TEXT NOT NULL DEFAULT '',
       reason TEXT NOT NULL,
       PRIMARY KEY (event_hash, reason)
     )
@@ -297,10 +353,24 @@ function createEventStore(databasePath: string): Database.Database {
   if (!columns.some((column) => column.name === "lineage_hash")) {
     database.exec("ALTER TABLE events ADD COLUMN lineage_hash TEXT");
   }
+  if (!columns.some((column) => column.name === "tool_use_hash")) {
+    database.exec("ALTER TABLE events ADD COLUMN tool_use_hash TEXT");
+  }
+  if (!columns.some((column) => column.name === "agent_hash")) {
+    database.exec("ALTER TABLE events ADD COLUMN agent_hash TEXT");
+  }
   if (!columns.some((column) => column.name === "source")) {
     database.exec("ALTER TABLE events ADD COLUMN source TEXT NOT NULL DEFAULT 'fixture'");
   }
-  return database;
+  const warningColumns = database.prepare("PRAGMA table_info(data_quality_warnings)").all() as { name: string }[];
+  if (!warningColumns.some((column) => column.name === "project_id")) {
+    database.exec("ALTER TABLE data_quality_warnings ADD COLUMN project_id TEXT NOT NULL DEFAULT ''");
+    database.exec(`
+      UPDATE data_quality_warnings
+      SET project_id = COALESCE((SELECT project_id FROM events WHERE events.event_hash = data_quality_warnings.event_hash), 'legacy-unscoped')
+      WHERE project_id = ''
+    `);
+  }
 }
 
 function storeEvents(
@@ -312,9 +382,9 @@ function storeEvents(
 ): void {
   const insert = database.prepare(`
     INSERT OR IGNORE INTO events (
-      event_hash, project_id, root_id, occurred_at, event_type, session_hash, turn_hash, lineage_hash, source
+      event_hash, project_id, root_id, occurred_at, event_type, session_hash, turn_hash, tool_use_hash, agent_hash, lineage_hash, source
     ) VALUES (
-      @eventHash, @projectId, @rootId, @occurredAt, @eventType, @sessionHash, @turnHash, @lineageHash, @source
+      @eventHash, @projectId, @rootId, @occurredAt, @eventType, @sessionHash, @turnHash, @toolUseHash, @agentHash, @lineageHash, @source
     )
   `);
 
@@ -326,11 +396,11 @@ function storeEvents(
   insertAll(events);
 
   const insertWarning = database.prepare(`
-    INSERT OR IGNORE INTO data_quality_warnings (event_hash, reason) VALUES (@eventHash, @reason)
+    INSERT OR IGNORE INTO data_quality_warnings (event_hash, project_id, reason) VALUES (@eventHash, @projectId, @reason)
   `);
   const insertWarnings = database.transaction((items: readonly DataQualityWarning[]) => {
     for (const warning of items) {
-      insertWarning.run(warning);
+      insertWarning.run({ ...warning, projectId });
     }
   });
   insertWarnings(warnings);
@@ -347,11 +417,66 @@ function storeEvents(
   insertCoverageEntries(coverage);
 }
 
+function readStoredEvents(database: Database.Database, projectId: string): StoredEvent[] {
+  return database
+    .prepare(`
+      SELECT rowid AS sequence, event_hash AS eventHash, root_id AS rootId, occurred_at AS occurredAt,
+        event_type AS eventType, session_hash AS sessionHash, turn_hash AS turnHash,
+        tool_use_hash AS toolUseHash, agent_hash AS agentHash, lineage_hash AS lineageHash, source
+      FROM events WHERE project_id = ?
+    `)
+    .all(projectId) as StoredEvent[];
+}
+
+function replaceSequenceWarnings(
+  database: Database.Database,
+  projectId: string,
+  warnings: readonly DataQualityWarning[]
+): void {
+  database
+    .prepare(`
+      DELETE FROM data_quality_warnings
+      WHERE reason IN ('missing-turn-stop', 'missing-tool-post', 'unmatched-tool-post')
+        AND project_id = ?
+    `)
+    .run(projectId);
+  const insertWarning = database.prepare(`
+    INSERT OR IGNORE INTO data_quality_warnings (event_hash, project_id, reason) VALUES (@eventHash, @projectId, @reason)
+  `);
+  const insertAll = database.transaction((items: readonly DataQualityWarning[]) => {
+    for (const warning of items) {
+      insertWarning.run({ ...warning, projectId });
+    }
+  });
+  insertAll(warnings);
+}
+
+function readPersistedInvalidTimestampWarnings(
+  database: Database.Database,
+  projectId: string
+): DataQualityWarning[] {
+  return database
+    .prepare(`
+      SELECT event_hash AS eventHash, reason FROM data_quality_warnings
+      WHERE project_id = ? AND reason = 'invalid-timestamp'
+    `)
+    .all(projectId) as DataQualityWarning[];
+}
+
+function countLegacyUnscopedWarnings(database: Database.Database): number {
+  return (
+    database
+      .prepare("SELECT COUNT(*) AS count FROM data_quality_warnings WHERE project_id = 'legacy-unscoped'")
+      .get() as { count: number }
+  ).count;
+}
+
 function renderReport(
   displayName: string,
   matchedEventCount: number,
   warnings: readonly DataQualityWarning[],
-  coverage: readonly CoverageEntry[]
+  coverage: readonly CoverageEntry[],
+  legacyUnscopedWarningCount: number
 ): string {
   const hasData = matchedEventCount > 0;
   return nunjucks.renderString(reportTemplate, {
@@ -362,11 +487,19 @@ function renderReport(
       ? `${matchedEventCount} sanitized event${matchedEventCount === 1 ? "" : "s"} matched this Project Profile.`
       : "No matching retained event metadata is available for this Project Profile.",
     warnings,
+    legacyUnscopedWarningCount,
     coverage: coverage.map((entry) => ({
       ...entry,
       label: entry.status === "no-data" ? "no data" : entry.status
     }))
   });
+}
+
+async function writeOfflineReport(htmlPath: string, contents: string): Promise<void> {
+  await mkdir(dirname(htmlPath), { recursive: true });
+  const temporaryPath = `${htmlPath}.${process.pid}.${temporaryOutputSequence += 1}.tmp`;
+  await writeFile(temporaryPath, contents, "utf8");
+  await rename(temporaryPath, htmlPath);
 }
 
 export async function generateProjectReport(input: GenerateProjectReportInput): Promise<ProjectReportResult> {
@@ -375,27 +508,49 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
   ensureStorageOutsideProjectRoots(databasePath, dataDirectory, profile.roots);
   const normalized = normalizeMatchingEvents(events, profile.roots);
 
-  await mkdir(dirname(databasePath), { recursive: true });
-  const database = createEventStore(databasePath);
-  try {
-    storeEvents(database, profile.id, normalized.events, normalized.warnings, coverage);
-    const storedEventCount = database
-      .prepare("SELECT COUNT(*) AS count FROM events WHERE project_id = ?")
-      .get(profile.id) as { count: number };
-    const storedCoverage = database
-      .prepare("SELECT report_date AS date, status FROM coverage WHERE project_id = ? ORDER BY report_date")
-      .all(profile.id) as CoverageEntry[];
-    const matchedEventCount = storedEventCount.count;
-    const resolvedCoverage = storedCoverage;
-    const coverageStatus = matchedEventCount > 0 ? "available" : "no-data";
-    await mkdir(dirname(htmlPath), { recursive: true });
-    await writeFile(
-      htmlPath,
-      renderReport(profile.displayName, matchedEventCount, normalized.warnings, resolvedCoverage),
-      "utf8"
-    );
-    return { matchedEventCount, coverage: coverageStatus, htmlPath };
-  } finally {
-    database.close();
-  }
+  return serializeInProcessRefresh(async () => {
+    await mkdir(dirname(databasePath), { recursive: true });
+    let database: Database.Database | undefined;
+    let transactionStarted = false;
+    try {
+      database = openEventStore(databasePath);
+      database.exec("BEGIN EXCLUSIVE");
+      transactionStarted = true;
+      initializeEventStore(database);
+      const invalidTimestampWarnings = normalized.warnings.filter((warning) => warning.reason === "invalid-timestamp");
+      storeEvents(database, profile.id, normalized.events, invalidTimestampWarnings, coverage);
+      const storedEvents = readStoredEvents(database, profile.id);
+      const sequenceWarnings = calculateSequenceWarnings(storedEvents);
+      replaceSequenceWarnings(database, profile.id, sequenceWarnings);
+      const persistedInvalidTimestampWarnings = readPersistedInvalidTimestampWarnings(database, profile.id);
+      const legacyUnscopedWarningCount = countLegacyUnscopedWarnings(database);
+      const storedEventCount = database
+        .prepare("SELECT COUNT(*) AS count FROM events WHERE project_id = ?")
+        .get(profile.id) as { count: number };
+      const storedCoverage = database
+        .prepare("SELECT report_date AS date, status FROM coverage WHERE project_id = ? ORDER BY report_date")
+        .all(profile.id) as CoverageEntry[];
+      const matchedEventCount = storedEventCount.count;
+      const resolvedCoverage = storedCoverage;
+      const coverageStatus = matchedEventCount > 0 ? "available" : "no-data";
+      const renderedReport = renderReport(
+        profile.displayName,
+        matchedEventCount,
+        [...persistedInvalidTimestampWarnings, ...sequenceWarnings],
+        resolvedCoverage,
+        legacyUnscopedWarningCount
+      );
+      database.exec("COMMIT");
+      transactionStarted = false;
+      await writeOfflineReport(htmlPath, renderedReport);
+      return { matchedEventCount, coverage: coverageStatus, htmlPath };
+    } catch (error: unknown) {
+      if (transactionStarted) {
+        database?.exec("ROLLBACK");
+      }
+      throw error;
+    } finally {
+      database?.close();
+    }
+  });
 }
