@@ -14,7 +14,7 @@ function attributionFor(feature: Feature, commit: CommitEvidence): Omit<FeatureA
   if (commit.ticketRefs?.some((reference) => feature.ticketRefs?.includes(reference))) return { evidence: "explicit-ticket", confidence: "high", suggested: false };
   if (commit.planningRefs?.some((reference) => feature.planningRefs?.includes(reference))) return { evidence: "planning-reference", confidence: "high", suggested: false };
   if (includesAny(commit.branch ?? "", feature.branches)) return { evidence: "branch", confidence: "medium", suggested: false };
-  if (includesAny(commit.subject, [feature.id, feature.name]) || includesAny(commit.scope ?? "", [feature.id, feature.name])) return { evidence: "commit-subject", confidence: "medium", suggested: false };
+  if (includesAny(commit.subject, [feature.id, feature.name])) return { evidence: "commit-subject", confidence: "medium", suggested: false };
   if (commit.paths?.some((path) => includesAny(path, feature.keywords))) return { evidence: "path", confidence: "low", suggested: true };
   if (includesAny(commit.subject, feature.keywords)) return { evidence: "semantic", confidence: "low", suggested: true };
   return undefined;

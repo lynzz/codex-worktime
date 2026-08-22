@@ -30,7 +30,8 @@ function open(options: StorageOptions): Database.Database {
       override_id TEXT NOT NULL,
       event_type TEXT NOT NULL,
       reason TEXT NOT NULL
-    )
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS attribution_override_events_unique ON attribution_override_events (override_id, event_type, reason)
   `);
   const legacyColumns = database.prepare("PRAGMA table_info(attribution_overrides)").all() as { name: string }[];
   if (legacyColumns.some((column) => column.name === "active")) {
@@ -51,7 +52,11 @@ export function appendOverride(options: StorageOptions, input: { id: string; att
   const override = applyAttributionOverride(input);
   const database = open(options);
   try {
-    database.prepare(`INSERT INTO attribution_overrides (id, original_json, replacement_feature_id, reason) VALUES (?, ?, ?, ?)`).run(override.id, JSON.stringify(override.original), override.replacementFeatureId, override.reason);
+    const legacyColumns = database.prepare("PRAGMA table_info(attribution_overrides)").all() as { name: string }[];
+    const insert = legacyColumns.some((column) => column.name === "active")
+      ? database.prepare(`INSERT INTO attribution_overrides (id, original_json, replacement_feature_id, reason, active) VALUES (?, ?, ?, ?, 1)`)
+      : database.prepare(`INSERT INTO attribution_overrides (id, original_json, replacement_feature_id, reason) VALUES (?, ?, ?, ?)`);
+    insert.run(override.id, JSON.stringify(override.original), override.replacementFeatureId, override.reason);
     database.prepare(`INSERT INTO attribution_override_events (override_id, event_type, reason) VALUES (?, 'applied', ?)`).run(override.id, override.reason);
     return override;
   } finally { database.close(); }
