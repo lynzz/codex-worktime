@@ -73,6 +73,11 @@ describe("generateProjectReport", () => {
     expect(html).toContain("explicit-ticket");
     expect(html).toContain("Low-confidence suggestion");
     expect(html).toContain("2 verified Active minutes");
+    expect(html).toContain('class="metric-grid"');
+    expect(html).toContain('class="summary-table"');
+    expect(html).toContain("Verified data · reporting summary");
+    expect(html).toContain("Feature attribution and verified minutes");
+    expect(html).toContain("Not allocated");
     expect(html).not.toContain("/private/eqa");
     const databaseContents = await readFile(databasePath, "latin1");
     const prohibitedValues = [

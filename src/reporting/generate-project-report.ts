@@ -156,57 +156,64 @@ const reportTemplate = `<!doctype html>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ displayName }} — Codex Worktime</title>
     <style>
-      body { font-family: system-ui, sans-serif; margin: 3rem auto; max-width: 46rem; color: #18212f; }
-      main { border: 1px solid #d8dee9; border-radius: 0.75rem; padding: 2rem; }
-      .status { font-weight: 700; color: {{ statusColor }}; }
+      :root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #162033; background: #edf2f9; }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 2rem 1rem 4rem; background: radial-gradient(circle at top right, #dbeafe, transparent 32rem), #edf2f9; }
+      main { margin: 0 auto; max-width: 72rem; }
+      .hero { padding: 2.5rem; border-radius: 1.5rem; background: linear-gradient(135deg, #102a43, #1e4976); color: #f8fbff; box-shadow: 0 1.5rem 3rem rgba(22, 32, 51, .18); }
+      .eyebrow { margin: 0 0 .5rem; color: #b9d5f3; font-size: .78rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+      h1 { margin: 0; font-size: clamp(2rem, 5vw, 3.4rem); letter-spacing: -.04em; }
+      h2 { margin: 0 0 1rem; font-size: 1.15rem; letter-spacing: -.015em; }
+      h3 { margin: 1.5rem 0 .65rem; font-size: .9rem; color: #4a5b72; }
+      .hero-copy { max-width: 42rem; margin: 1rem 0 0; color: #d8eafa; }
+      .status { display: inline-flex; margin: 1.35rem 0 0; padding: .42rem .72rem; border-radius: 999px; background: rgba(255,255,255,.13); color: #fff; font-size: .85rem; font-weight: 750; }
+      .report-range { margin: .65rem 0 0; color: #d8eafa; font-size: .9rem; }
+      .metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1.25rem 0; }
+      .metric { min-height: 8.75rem; padding: 1.25rem; border: 1px solid #dce6f2; border-radius: 1rem; background: #fff; box-shadow: 0 .5rem 1.5rem rgba(31, 62, 93, .06); }
+      .metric-label { display: block; color: #60708a; font-size: .78rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+      .metric-value { display: block; margin-top: .55rem; color: #102a43; font-size: clamp(1.45rem, 3vw, 2.1rem); font-weight: 800; letter-spacing: -.045em; }
+      .metric-note { margin: .45rem 0 0; color: #60708a; font-size: .84rem; line-height: 1.45; }
+      .panel { margin-top: 1.25rem; padding: 1.4rem; border: 1px solid #dce6f2; border-radius: 1rem; background: rgba(255,255,255,.96); box-shadow: 0 .5rem 1.5rem rgba(31, 62, 93, .05); }
+      .panel-note { margin: -.35rem 0 1rem; color: #60708a; font-size: .9rem; line-height: 1.5; }
+      table { width: 100%; border-collapse: collapse; overflow: hidden; border: 1px solid #e3ebf5; border-radius: .8rem; }
+      th, td { padding: .78rem .85rem; border-bottom: 1px solid #e7eef7; text-align: left; vertical-align: top; font-size: .88rem; }
+      th { color: #51637c; background: #f6f9fd; font-size: .72rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
+      tr:last-child td { border-bottom: 0; }
+      .number { color: #102a43; font-variant-numeric: tabular-nums; font-weight: 750; }
+      .tag { display: inline-block; padding: .18rem .45rem; border-radius: 999px; background: #e8f1fb; color: #28557f; font-size: .76rem; font-weight: 700; }
+      .tag-low { background: #fff3d5; color: #805b00; }
+      .tag-high { background: #e4f7ea; color: #166534; }
+      .muted { color: #60708a; }
+      details { margin-top: 1rem; }
+      summary { cursor: pointer; color: #28557f; font-weight: 750; }
+      .provenance { word-break: break-all; color: #60708a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; }
+      @media (max-width: 40rem) { body { padding: 1rem .75rem 2rem; } .hero, .panel { padding: 1.15rem; } .metric-grid { grid-template-columns: 1fr; } th, td { padding: .65rem; } .hide-small { display: none; } }
     </style>
   </head>
   <body>
     <main>
-      <h1>{{ displayName }}</h1>
-      <p>{{ viewLabel }}</p>
-      <p class="status">{{ statusLabel }}</p>
-      <p>{{ summary }}</p>
-      {% if dateRangeLabel %}<p>Reporting range: {{ dateRangeLabel }} (Asia/Shanghai)</p>{% endif %}
-      <h2>Verified data</h2>
-      <h3>Verified intervals</h3>
-      <p>Active Interval: {{ accounting.active.wallClockMinutes }} wall-clock minutes{% if view === "internal" %} ({{ accounting.active.parallelMachineMinutes }} parallel-machine minutes){% endif %}.</p>
-      <p>Run Interval: {{ accounting.run.wallClockMinutes }} wall-clock minutes{% if view === "internal" %} ({{ accounting.run.parallelMachineMinutes }} parallel-machine minutes){% endif %}.</p>
-      <p>No inferred human-time metric is included in this V1 report.</p>
-      <h3>Daily verified Active Interval (Asia/Shanghai)</h3>
-      <ul>{% for entry in accounting.active.daily %}<li>{{ entry.date }}: {{ entry.minutes }} minutes</li>{% endfor %}</ul>
-      <h3>Weekly verified Active Interval (Asia/Shanghai)</h3>
-      <ul>{% for entry in accounting.active.weekly %}<li>{{ entry.week }}: {{ entry.minutes }} minutes</li>{% endfor %}</ul>
-      {% if view === "internal" %}
-        <p>{{ accounting.active.intervals.length }} Active Interval union segment{% if accounting.active.intervals.length !== 1 %}s{% endif %}; each is traceable to its retained boundary event identities.</p>
-        <ul>{% for interval in accounting.active.intervals %}<li>{{ interval.start }}–{{ interval.end }}: {{ interval.sourceEventIds | join(', ') }}</li>{% endfor %}</ul>
-      {% endif %}
-      {% if view === "internal" %}
-        <p>Active and Run totals are wall-clock unions; overlapping segments are deduplicated rather than added.</p>
-        <p>{{ accounting.run.intervals.length }} Run Interval union segment{% if accounting.run.intervals.length !== 1 %}s{% endif %}.</p>
-        <ul>{% for interval in accounting.run.intervals %}<li>{{ interval.start }}–{{ interval.end }}: {{ interval.sourceEventIds | join(', ') }}</li>{% endfor %}</ul>
-      {% endif %}
-      <h2>No-data and coverage</h2>
-      {% if coverage.length %}<ul>{% for entry in coverage %}<li>{{ entry.date }}: {{ entry.label }}</li>{% endfor %}</ul>{% else %}<p>No coverage entries were retained; this is not a zero-time claim.</p>{% endif %}
-      {% if featureAttributions.length %}
-        <h2>Inferred delivery evidence</h2>
-        <ul>{% for attribution in featureAttributions %}<li>{{ attribution.featureName }}: {{ attribution.evidence }} ({{ attribution.confidence }} confidence){% if attribution.suggested %} — Low-confidence suggestion{% endif %}{% if view === "internal" %} [{{ attribution.commitId }}]{% endif %}</li>{% endfor %}</ul>
-      {% else %}
-        <h2>Inferred delivery evidence</h2>
-        <p>No inferred Feature attribution was supplied; no low-confidence attribution is claimed.</p>
-      {% endif %}
-      {% if featureIntervalTotals.length %}
-        <h2>Feature-linked verified intervals</h2>
-        <ul>{% for total in featureIntervalTotals %}<li>{{ total.displayName }}: {{ total.activeMinutes }} verified Active minutes; {{ total.runMinutes }} verified Run minutes{% if view === "internal" %} ({{ total.evidenceCount }} explicit evidence link{% if total.evidenceCount !== 1 %}s{% endif %}){% endif %}.</li>{% endfor %}</ul>
-      {% endif %}
-      {% if featureTotalsUnavailableForRange %}<p>Feature-linked verified intervals were not supplied with evidence for this reporting range; no feature duration is claimed.</p>{% endif %}
-      {% if warnings.length and view === "internal" %}
-        <p>{{ warnings.length }} data-quality warning{% if warnings.length !== 1 %}s{% endif %}.</p>
-        <ul>{% for warning in warnings %}<li>{{ warning.reason }} (event {{ warning.eventHash }})</li>{% endfor %}</ul>
-      {% endif %}
-      {% if legacyUnscopedWarningCount and view === "internal" %}
-        <p>{{ legacyUnscopedWarningCount }} global legacy warning{% if legacyUnscopedWarningCount !== 1 %}s{% endif %} could not be attributed to a Project Profile.</p>
-      {% endif %}
+      <header class="hero"><p class="eyebrow">Codex Worktime · {{ viewLabel }}</p><h1>{{ displayName }}</h1><p class="hero-copy">{{ summary }}</p><p class="status">{{ statusLabel }}</p>{% if dateRangeLabel %}<p class="report-range">{{ dateRangeLabel }} (Asia/Shanghai)</p>{% endif %}</header>
+      <section class="metric-grid" aria-label="Verified metrics">
+        <article class="metric"><span class="metric-label">Active Interval</span><strong class="metric-value">{{ accounting.active.wallClockMinutes }} wall-clock minutes</strong><p class="metric-note">Verified wall-clock union{% if view === "internal" %}; {{ accounting.active.parallelMachineMinutes }} parallel-machine minutes{% endif %}.</p></article>
+        <article class="metric"><span class="metric-label">Run Interval</span><strong class="metric-value">{{ accounting.run.wallClockMinutes }} wall-clock minutes</strong><p class="metric-note">Observable tool execution or waiting only.</p></article>
+        <article class="metric"><span class="metric-label">Coverage</span><strong class="metric-value">{{ coverageSummary.available }} available</strong><p class="metric-note">{{ coverageSummary.unknown }} unknown · {{ coverageSummary.noData }} no-data. Neither is zero time.</p></article>
+      </section>
+      <section class="panel"><h2>Verified data · reporting summary</h2><p class="panel-note">Active and Run are separate event-bounded measures. No inferred human-time metric is included.</p>
+        <table class="summary-table"><thead><tr><th>Metric</th><th>Verified value</th><th>Interpretation</th></tr></thead><tbody>
+          <tr><td>Active Interval</td><td class="number">{{ accounting.active.wallClockMinutes }} minutes</td><td>Completed UserPromptSubmit → Stop intervals.</td></tr>
+          <tr><td>Run Interval</td><td class="number">{{ accounting.run.wallClockMinutes }} minutes</td><td>Completed PreToolUse → PostToolUse intervals.</td></tr>
+          <tr><td>Coverage</td><td class="number">{{ coverageSummary.available }} available / {{ coverageSummary.unknown }} unknown / {{ coverageSummary.noData }} no-data</td><td>Unknown and no-data do not mean zero work.</td></tr>
+        </tbody></table></section>
+      <section class="panel"><h2>Verified interval breakdown</h2>
+        <h3>Daily verified Active Interval (Asia/Shanghai)</h3><table class="detail-table"><thead><tr><th>Date</th><th>Minutes</th></tr></thead><tbody>{% for entry in accounting.active.daily %}<tr><td>{{ entry.date }}</td><td class="number">{{ entry.minutes }}</td></tr>{% else %}<tr><td colspan="2" class="muted">No verified Active Interval in this period.</td></tr>{% endfor %}</tbody></table>
+        <h3>Weekly verified Active Interval (Asia/Shanghai)</h3><table class="detail-table"><thead><tr><th>Week</th><th>Minutes</th></tr></thead><tbody>{% for entry in accounting.active.weekly %}<tr><td>{{ entry.week }}</td><td class="number">{{ entry.minutes }}</td></tr>{% else %}<tr><td colspan="2" class="muted">No verified Active Interval in this period.</td></tr>{% endfor %}</tbody></table>
+      </section>
+      <section class="panel"><h2>Inferred delivery evidence · Feature attribution and verified minutes</h2><p class="panel-note">Git contributes delivery evidence only. A Feature receives minutes only when reviewed evidence connects it to a verified interval; commit timestamps never create time.</p>
+        <table class="detail-table"><thead><tr><th>Feature</th><th>Evidence / Confidence</th><th>Verified Active</th><th>Verified Run</th>{% if view === "internal" %}<th>Evidence links</th>{% endif %}</tr></thead><tbody>{% for row in featureRows %}<tr><td><strong>{{ row.name }}</strong>{% if row.suggested %}<br><span class="tag tag-low">Low-confidence suggestion</span>{% endif %}</td><td><span class="tag tag-{{ row.confidence }}">{{ row.evidence }}</span> <span class="muted">{{ row.confidence }} confidence</span>{% if view === "internal" and row.commitId %}<br><span class="provenance">{{ row.commitId }}</span>{% endif %}</td><td class="number">{{ row.activeLabel }}</td><td class="number">{{ row.runLabel }}</td>{% if view === "internal" %}<td>{{ row.evidenceCount }}</td>{% endif %}</tr>{% else %}<tr><td colspan="5" class="muted">No inferred Feature attribution was supplied; no low-confidence attribution is claimed.</td></tr>{% endfor %}</tbody></table>
+        {% if featureTotalsUnavailableForRange %}<p class="panel-note">Feature-linked verified intervals were not supplied with evidence for this reporting range; no feature duration is claimed.</p>{% endif %}
+      </section>
+      <section class="panel"><h2>No-data and coverage</h2>{% if coverage.length %}<table class="detail-table"><thead><tr><th>Date</th><th>Status</th></tr></thead><tbody>{% for entry in coverage %}<tr aria-label="{{ entry.date }}: {{ entry.label }}"><td>{{ entry.date }}</td><td>{{ entry.label }}</td></tr>{% endfor %}</tbody></table>{% else %}<p class="panel-note">No coverage entries were retained; this is not a zero-time claim.</p>{% endif %}</section>
+      {% if view === "internal" and (warnings.length or legacyUnscopedWarningCount) %}<section class="panel"><h2>Audit detail</h2>{% if warnings.length %}<p class="panel-note">{{ warnings.length }} data-quality warning{% if warnings.length !== 1 %}s{% endif %}.</p><details><summary>Show normalized warning identities</summary><ul>{% for warning in warnings %}<li>{{ warning.reason }} <span class="provenance">{{ warning.eventHash }}</span></li>{% endfor %}</ul></details>{% endif %}{% if legacyUnscopedWarningCount %}<p class="panel-note">{{ legacyUnscopedWarningCount }} global legacy warning{% if legacyUnscopedWarningCount !== 1 %}s{% endif %} could not be attributed to a Project Profile.</p>{% endif %}</section>{% endif %}
     </main>
   </body>
 </html>`;
@@ -554,6 +561,58 @@ function renderReport(
 ): string {
   const hasData = matchedEventCount > 0 || accounting.active.wallClockMinutes > 0 || accounting.run.wallClockMinutes > 0;
   const namesByFeatureId = new Map(featureAttributions.map((attribution) => [attribution.featureId, attribution.featureName]));
+  const visibleCoverage = coverage.filter((entry) => !dateRange || (entry.date >= dateRange.from && entry.date <= dateRange.to));
+  const coverageSummary = visibleCoverage.reduce(
+    (summary, entry) => ({
+      ...summary,
+      available: summary.available + Number(entry.status === "available"),
+      unknown: summary.unknown + Number(entry.status === "unknown"),
+      noData: summary.noData + Number(entry.status === "no-data")
+    }),
+    { available: 0, unknown: 0, noData: 0 }
+  );
+  const visibleFeatureTotals = featureIntervalTotals
+    .filter((total) => !dateRange || (total.dateRange?.from === dateRange.from && total.dateRange.to === dateRange.to))
+    .filter((total) => view === "internal" || namesByFeatureId.has(total.featureId));
+  const totalsByFeatureId = new Map(visibleFeatureTotals.map((total) => [total.featureId, total]));
+  const featureRows = new Map<string, {
+    name: string;
+    evidence: string;
+    confidence: "high" | "medium" | "low";
+    suggested: boolean;
+    commitId?: string;
+    activeLabel: string;
+    runLabel: string;
+    evidenceCount: string;
+  }>();
+  const confidenceRank = { high: 3, medium: 2, low: 1 } as const;
+  for (const attribution of featureAttributions) {
+    const existing = featureRows.get(attribution.featureId);
+    if (existing && confidenceRank[existing.confidence] >= confidenceRank[attribution.confidence]) continue;
+    const total = totalsByFeatureId.get(attribution.featureId);
+    featureRows.set(attribution.featureId, {
+      name: attribution.featureName,
+      evidence: attribution.evidence,
+      confidence: attribution.confidence,
+      suggested: attribution.suggested,
+      ...(view === "internal" ? { commitId: attribution.commitId } : {}),
+      activeLabel: total ? `${total.activeMinutes} verified Active minutes` : "Not allocated",
+      runLabel: total ? `${total.runMinutes} verified Run minutes` : "Not allocated",
+      evidenceCount: total ? String(total.evidenceCount) : "—"
+    });
+  }
+  for (const total of visibleFeatureTotals) {
+    if (featureRows.has(total.featureId)) continue;
+    featureRows.set(total.featureId, {
+      name: namesByFeatureId.get(total.featureId) ?? total.featureId,
+      evidence: "explicit interval link",
+      confidence: "high",
+      suggested: false,
+      activeLabel: `${total.activeMinutes} verified Active minutes`,
+      runLabel: `${total.runMinutes} verified Run minutes`,
+      evidenceCount: String(total.evidenceCount)
+    });
+  }
   return nunjucks.renderString(reportTemplate, {
     displayName,
     statusColor: hasData ? "#0f7b3e" : "#805b00",
@@ -569,15 +628,12 @@ function renderReport(
     accounting,
     legacyUnscopedWarningCount,
     dateRangeLabel: dateRange ? `${dateRange.from} through ${dateRange.to}` : undefined,
-    coverage: coverage.filter((entry) => !dateRange || (entry.date >= dateRange.from && entry.date <= dateRange.to)).map((entry) => ({
+    coverage: visibleCoverage.map((entry) => ({
       ...entry,
       label: entry.status === "no-data" ? "no data — not zero time" : entry.status === "unknown" ? "unknown — no data claim" : "available"
     })),
-    featureAttributions,
-    featureIntervalTotals: featureIntervalTotals
-      .filter((total) => !dateRange || (total.dateRange?.from === dateRange.from && total.dateRange.to === dateRange.to))
-      .filter((total) => view === "internal" || namesByFeatureId.has(total.featureId))
-      .map((total) => ({ ...total, displayName: view === "customer" ? namesByFeatureId.get(total.featureId) : total.featureId })),
+    coverageSummary,
+    featureRows: [...featureRows.values()],
     featureTotalsUnavailableForRange: Boolean(dateRange && featureIntervalTotals.length && !featureIntervalTotals.some(
       (total) => total.dateRange?.from === dateRange.from && total.dateRange.to === dateRange.to
     ))
