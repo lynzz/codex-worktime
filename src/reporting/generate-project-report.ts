@@ -9,6 +9,8 @@ import nunjucks from "nunjucks";
 import { z } from "zod";
 
 import { calculateIntervals, type IntervalCalculation, type ReportingDateRange } from "../accounting/calculate-intervals.js";
+import { readProjectCommitEstimates } from "../attribution/read-project-commit-estimates.js";
+import type { FeatureCommitEstimate } from "../attribution/estimate-feature-commit-time.js";
 
 const safeIdentifierSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/);
 let temporaryOutputSequence = 0;
@@ -212,6 +214,8 @@ const reportTemplate = `<!doctype html>
         <table class="detail-table"><thead><tr><th>功能</th><th>证据 / 可信度</th><th>已核验活跃</th><th>已核验运行</th>{% if view === "internal" %}<th>证据链接</th>{% endif %}</tr></thead><tbody>{% for row in featureRows %}<tr><td><strong>{{ row.name }}</strong>{% if row.suggested %}<br><span class="tag tag-low">低可信度建议</span>{% endif %}</td><td><span class="tag tag-{{ row.confidence }}">{{ row.evidence }}</span> <span class="muted">{{ row.confidenceLabel }}可信度</span>{% if view === "internal" and row.commitId %}<br><span class="provenance">{{ row.commitId }}</span>{% endif %}</td><td class="number">{{ row.activeLabel }}</td><td class="number">{{ row.runLabel }}</td>{% if view === "internal" %}<td>{{ row.evidenceCount }}</td>{% endif %}</tr>{% else %}<tr><td colspan="5" class="muted">未提供推断的功能归因，因此不主张低可信度归因。</td></tr>{% endfor %}</tbody></table>
         {% if featureTotalsUnavailableForRange %}<p class="panel-note">未提供该报告范围内的功能区间关联证据，因此不主张功能时长。</p>{% endif %}
       </section>
+      {% if view === "internal" %}<section class="panel"><h2>提交节奏推测 · 按功能分组</h2><p class="panel-note">按 Conventional Commit 的 scope 自动分组：只有相邻且属于同一分组的提交才累计间隔，每段最多 60 分钟。它是提交节奏推测，不是已核验 AI 或人工工时。</p>{% if commitEstimates.length %}
+        <table class="detail-table"><thead><tr><th>功能分组</th><th>提交数</th><th>推测投入</th></tr></thead><tbody>{% for row in commitEstimates %}<tr><td><strong>{{ row.featureName }}</strong></td><td class="number">{{ row.commitCount }}</td><td class="number">{{ row.estimatedMinutes }} 分钟（约 {{ row.estimatedHours }} 小时）</td></tr>{% endfor %}</tbody></table><p class="panel-note">合计：{{ commitEstimateTotalMinutes }} 分钟（约 {{ commitEstimateTotalHours }} 小时）。</p>{% else %}<p class="panel-note">本报告范围内没有可推测的连续同功能提交。</p>{% endif %}</section>{% endif %}
       <section class="panel"><h2>无数据与覆盖情况</h2>{% if coverage.length %}<table class="detail-table"><thead><tr><th>日期</th><th>状态</th></tr></thead><tbody>{% for entry in coverage %}<tr aria-label="{{ entry.date }}: {{ entry.label }}"><td>{{ entry.date }}</td><td>{{ entry.label }}</td></tr>{% endfor %}</tbody></table>{% else %}<p class="panel-note">没有保留覆盖记录；这不代表零工时。</p>{% endif %}</section>
       {% if view === "internal" and (warnings.length or legacyUnscopedWarningCount) %}<section class="panel"><h2>审计明细</h2>{% if warnings.length %}<p class="panel-note">{{ warnings.length }} 条数据质量警告。</p><details><summary>查看规范化警告标识</summary><ul>{% for warning in warnings %}<li>{{ warning.reason }} <span class="provenance">{{ warning.eventHash }}</span></li>{% endfor %}</ul></details>{% endif %}{% if legacyUnscopedWarningCount %}<p class="panel-note">{{ legacyUnscopedWarningCount }} 条全局旧警告无法归入 Project Profile。</p>{% endif %}</section>{% endif %}
     </main>
@@ -556,6 +560,7 @@ function renderReport(
   accounting: IntervalCalculation,
   featureAttributions: readonly z.output<typeof featureAttributionSchema>[],
   featureIntervalTotals: readonly z.output<typeof featureIntervalTotalSchema>[],
+  commitEstimates: readonly FeatureCommitEstimate[],
   view: "internal" | "customer",
   dateRange: ReportingDateRange | undefined
 ): string {
@@ -571,6 +576,7 @@ function renderReport(
     }),
     { available: 0, unknown: 0, noData: 0 }
   );
+  const commitEstimateTotalMinutes = commitEstimates.reduce((total, estimate) => total + estimate.estimatedMinutes, 0);
   const visibleFeatureTotals = featureIntervalTotals
     .filter((total) => !dateRange || (total.dateRange?.from === dateRange.from && total.dateRange.to === dateRange.to))
     .filter((total) => view === "internal" || namesByFeatureId.has(total.featureId));
@@ -646,6 +652,12 @@ function renderReport(
       label: entry.status === "no-data" ? "无数据（不代表零工时）" : entry.status === "unknown" ? "未知（不主张工时）" : "可用"
     })),
     coverageSummary,
+    commitEstimates: commitEstimates.map((estimate) => ({
+      ...estimate,
+      estimatedHours: (estimate.estimatedMinutes / 60).toFixed(1)
+    })),
+    commitEstimateTotalMinutes,
+    commitEstimateTotalHours: (commitEstimateTotalMinutes / 60).toFixed(1),
     featureRows: [...featureRows.values()],
     featureTotalsUnavailableForRange: Boolean(dateRange && featureIntervalTotals.length && !featureIntervalTotals.some(
       (total) => total.dateRange?.from === dateRange.from && total.dateRange.to === dateRange.to
@@ -668,6 +680,9 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
   const dataDirectory = resolve(input.applicationDataDirectory ?? applicationDataDirectory());
   ensureStorageOutsideProjectRoots(databasePath, dataDirectory, profile.roots);
   const normalized = normalizeMatchingEvents(events, profile.roots);
+  const commitEstimates = dateRange
+    ? await readProjectCommitEstimates({ roots: profile.roots, dateRange })
+    : [];
 
   return serializeInProcessRefresh(async () => {
     await mkdir(dirname(databasePath), { recursive: true });
@@ -722,6 +737,7 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
         accounting,
         featureAttributions,
         featureIntervalTotals,
+        commitEstimates,
         view,
         dateRange
       );

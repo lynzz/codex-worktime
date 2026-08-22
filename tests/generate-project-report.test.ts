@@ -77,6 +77,8 @@ describe("generateProjectReport", () => {
     expect(html).toContain('class="summary-table"');
     expect(html).toContain("已核验数据 · 汇总");
     expect(html).toContain("功能归因与已核验分钟");
+    expect(html).toContain("提交节奏推测 · 按功能分组");
+    expect(html).toContain("没有可推测的连续同功能提交");
     expect(html).toContain("未分配");
     expect(html).not.toContain("/private/eqa");
     const databaseContents = await readFile(databasePath, "latin1");
