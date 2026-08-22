@@ -139,6 +139,8 @@ export function calculateIntervals(events: readonly AccountingEvent[]): Interval
       if (start) {
         if (event.epochMilliseconds < start.epochMilliseconds) {
           warnings.push({ eventId: event.id, reason: "out-of-order-turn-event" });
+          openTurns.delete(key!);
+          if (currentTurnByStream.get(streamKey) === key) currentTurnByStream.delete(streamKey);
         } else {
           active.push({ start: start.epochMilliseconds, end: event.epochMilliseconds, startEventId: start.id, endEventId: event.id, sourceEventIds: [start.id, event.id] });
           openTurns.delete(key!);
