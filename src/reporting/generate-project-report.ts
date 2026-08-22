@@ -150,7 +150,7 @@ type DataQualityWarning = {
 };
 
 const reportTemplate = `<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -193,27 +193,27 @@ const reportTemplate = `<!doctype html>
   <body>
     <main>
       <header class="hero"><p class="eyebrow">Codex Worktime · {{ viewLabel }}</p><h1>{{ displayName }}</h1><p class="hero-copy">{{ summary }}</p><p class="status">{{ statusLabel }}</p>{% if dateRangeLabel %}<p class="report-range">{{ dateRangeLabel }} (Asia/Shanghai)</p>{% endif %}</header>
-      <section class="metric-grid" aria-label="Verified metrics">
-        <article class="metric"><span class="metric-label">Active Interval</span><strong class="metric-value">{{ accounting.active.wallClockMinutes }} wall-clock minutes</strong><p class="metric-note">Verified wall-clock union{% if view === "internal" %}; {{ accounting.active.parallelMachineMinutes }} parallel-machine minutes{% endif %}.</p></article>
-        <article class="metric"><span class="metric-label">Run Interval</span><strong class="metric-value">{{ accounting.run.wallClockMinutes }} wall-clock minutes</strong><p class="metric-note">Observable tool execution or waiting only.</p></article>
-        <article class="metric"><span class="metric-label">Coverage</span><strong class="metric-value">{{ coverageSummary.available }} available</strong><p class="metric-note">{{ coverageSummary.unknown }} unknown · {{ coverageSummary.noData }} no-data. Neither is zero time.</p></article>
+      <section class="metric-grid" aria-label="已核验指标">
+        <article class="metric"><span class="metric-label">活跃区间</span><strong class="metric-value">{{ accounting.active.wallClockMinutes }} 分钟</strong><p class="metric-note">已核验的墙钟时间并集{% if view === "internal" %}；{{ accounting.active.parallelMachineMinutes }} 分钟并行机器时间{% endif %}。</p></article>
+        <article class="metric"><span class="metric-label">运行区间</span><strong class="metric-value">{{ accounting.run.wallClockMinutes }} 分钟</strong><p class="metric-note">仅统计可观察的工具执行或等待。</p></article>
+        <article class="metric"><span class="metric-label">数据覆盖</span><strong class="metric-value">{{ coverageSummary.available }} 天可用</strong><p class="metric-note">{{ coverageSummary.unknown }} 天未知 · {{ coverageSummary.noData }} 天无数据；两者都不代表零工时。</p></article>
       </section>
-      <section class="panel"><h2>Verified data · reporting summary</h2><p class="panel-note">Active and Run are separate event-bounded measures. No inferred human-time metric is included.</p>
-        <table class="summary-table"><thead><tr><th>Metric</th><th>Verified value</th><th>Interpretation</th></tr></thead><tbody>
-          <tr><td>Active Interval</td><td class="number">{{ accounting.active.wallClockMinutes }} minutes</td><td>Completed UserPromptSubmit → Stop intervals.</td></tr>
-          <tr><td>Run Interval</td><td class="number">{{ accounting.run.wallClockMinutes }} minutes</td><td>Completed PreToolUse → PostToolUse intervals.</td></tr>
-          <tr><td>Coverage</td><td class="number">{{ coverageSummary.available }} available / {{ coverageSummary.unknown }} unknown / {{ coverageSummary.noData }} no-data</td><td>Unknown and no-data do not mean zero work.</td></tr>
+      <section class="panel"><h2>已核验数据 · 汇总</h2><p class="panel-note">活跃区间与运行区间是两个独立、由事件边界确定的指标；本报告不包含推算的人类工时。</p>
+        <table class="summary-table"><thead><tr><th>指标</th><th>已核验值</th><th>说明</th></tr></thead><tbody>
+          <tr><td>活跃区间</td><td class="number">{{ accounting.active.wallClockMinutes }} 分钟</td><td>由完整的 UserPromptSubmit → Stop 区间构成。</td></tr>
+          <tr><td>运行区间</td><td class="number">{{ accounting.run.wallClockMinutes }} 分钟</td><td>由完整的 PreToolUse → PostToolUse 区间构成。</td></tr>
+          <tr><td>数据覆盖</td><td class="number">{{ coverageSummary.available }} 天可用 / {{ coverageSummary.unknown }} 天未知 / {{ coverageSummary.noData }} 天无数据</td><td>未知或无数据都不代表零工时。</td></tr>
         </tbody></table></section>
-      <section class="panel"><h2>Verified interval breakdown</h2>
-        <h3>Daily verified Active Interval (Asia/Shanghai)</h3><table class="detail-table"><thead><tr><th>Date</th><th>Minutes</th></tr></thead><tbody>{% for entry in accounting.active.daily %}<tr><td>{{ entry.date }}</td><td class="number">{{ entry.minutes }}</td></tr>{% else %}<tr><td colspan="2" class="muted">No verified Active Interval in this period.</td></tr>{% endfor %}</tbody></table>
-        <h3>Weekly verified Active Interval (Asia/Shanghai)</h3><table class="detail-table"><thead><tr><th>Week</th><th>Minutes</th></tr></thead><tbody>{% for entry in accounting.active.weekly %}<tr><td>{{ entry.week }}</td><td class="number">{{ entry.minutes }}</td></tr>{% else %}<tr><td colspan="2" class="muted">No verified Active Interval in this period.</td></tr>{% endfor %}</tbody></table>
+      <section class="panel"><h2>已核验区间明细</h2>
+        <h3>按日活跃区间（Asia/Shanghai）</h3><table class="detail-table"><thead><tr><th>日期</th><th>分钟</th></tr></thead><tbody>{% for entry in accounting.active.daily %}<tr><td>{{ entry.date }}</td><td class="number">{{ entry.minutes }}</td></tr>{% else %}<tr><td colspan="2" class="muted">本周期没有已核验的活跃区间。</td></tr>{% endfor %}</tbody></table>
+        <h3>按周活跃区间（Asia/Shanghai）</h3><table class="detail-table"><thead><tr><th>周</th><th>分钟</th></tr></thead><tbody>{% for entry in accounting.active.weekly %}<tr><td>{{ entry.week }}</td><td class="number">{{ entry.minutes }}</td></tr>{% else %}<tr><td colspan="2" class="muted">本周期没有已核验的活跃区间。</td></tr>{% endfor %}</tbody></table>
       </section>
-      <section class="panel"><h2>Inferred delivery evidence · Feature attribution and verified minutes</h2><p class="panel-note">Git contributes delivery evidence only. A Feature receives minutes only when reviewed evidence connects it to a verified interval; commit timestamps never create time.</p>
-        <table class="detail-table"><thead><tr><th>Feature</th><th>Evidence / Confidence</th><th>Verified Active</th><th>Verified Run</th>{% if view === "internal" %}<th>Evidence links</th>{% endif %}</tr></thead><tbody>{% for row in featureRows %}<tr><td><strong>{{ row.name }}</strong>{% if row.suggested %}<br><span class="tag tag-low">Low-confidence suggestion</span>{% endif %}</td><td><span class="tag tag-{{ row.confidence }}">{{ row.evidence }}</span> <span class="muted">{{ row.confidence }} confidence</span>{% if view === "internal" and row.commitId %}<br><span class="provenance">{{ row.commitId }}</span>{% endif %}</td><td class="number">{{ row.activeLabel }}</td><td class="number">{{ row.runLabel }}</td>{% if view === "internal" %}<td>{{ row.evidenceCount }}</td>{% endif %}</tr>{% else %}<tr><td colspan="5" class="muted">No inferred Feature attribution was supplied; no low-confidence attribution is claimed.</td></tr>{% endfor %}</tbody></table>
-        {% if featureTotalsUnavailableForRange %}<p class="panel-note">Feature-linked verified intervals were not supplied with evidence for this reporting range; no feature duration is claimed.</p>{% endif %}
+      <section class="panel"><h2>推断的交付证据 · 功能归因与已核验分钟</h2><p class="panel-note">Git 只提供交付证据。功能只有在审阅证据将其关联到已核验区间时才会获得分钟数；commit 时间戳绝不产生工时。</p>
+        <table class="detail-table"><thead><tr><th>功能</th><th>证据 / 可信度</th><th>已核验活跃</th><th>已核验运行</th>{% if view === "internal" %}<th>证据链接</th>{% endif %}</tr></thead><tbody>{% for row in featureRows %}<tr><td><strong>{{ row.name }}</strong>{% if row.suggested %}<br><span class="tag tag-low">低可信度建议</span>{% endif %}</td><td><span class="tag tag-{{ row.confidence }}">{{ row.evidence }}</span> <span class="muted">{{ row.confidenceLabel }}可信度</span>{% if view === "internal" and row.commitId %}<br><span class="provenance">{{ row.commitId }}</span>{% endif %}</td><td class="number">{{ row.activeLabel }}</td><td class="number">{{ row.runLabel }}</td>{% if view === "internal" %}<td>{{ row.evidenceCount }}</td>{% endif %}</tr>{% else %}<tr><td colspan="5" class="muted">未提供推断的功能归因，因此不主张低可信度归因。</td></tr>{% endfor %}</tbody></table>
+        {% if featureTotalsUnavailableForRange %}<p class="panel-note">未提供该报告范围内的功能区间关联证据，因此不主张功能时长。</p>{% endif %}
       </section>
-      <section class="panel"><h2>No-data and coverage</h2>{% if coverage.length %}<table class="detail-table"><thead><tr><th>Date</th><th>Status</th></tr></thead><tbody>{% for entry in coverage %}<tr aria-label="{{ entry.date }}: {{ entry.label }}"><td>{{ entry.date }}</td><td>{{ entry.label }}</td></tr>{% endfor %}</tbody></table>{% else %}<p class="panel-note">No coverage entries were retained; this is not a zero-time claim.</p>{% endif %}</section>
-      {% if view === "internal" and (warnings.length or legacyUnscopedWarningCount) %}<section class="panel"><h2>Audit detail</h2>{% if warnings.length %}<p class="panel-note">{{ warnings.length }} data-quality warning{% if warnings.length !== 1 %}s{% endif %}.</p><details><summary>Show normalized warning identities</summary><ul>{% for warning in warnings %}<li>{{ warning.reason }} <span class="provenance">{{ warning.eventHash }}</span></li>{% endfor %}</ul></details>{% endif %}{% if legacyUnscopedWarningCount %}<p class="panel-note">{{ legacyUnscopedWarningCount }} global legacy warning{% if legacyUnscopedWarningCount !== 1 %}s{% endif %} could not be attributed to a Project Profile.</p>{% endif %}</section>{% endif %}
+      <section class="panel"><h2>无数据与覆盖情况</h2>{% if coverage.length %}<table class="detail-table"><thead><tr><th>日期</th><th>状态</th></tr></thead><tbody>{% for entry in coverage %}<tr aria-label="{{ entry.date }}: {{ entry.label }}"><td>{{ entry.date }}</td><td>{{ entry.label }}</td></tr>{% endfor %}</tbody></table>{% else %}<p class="panel-note">没有保留覆盖记录；这不代表零工时。</p>{% endif %}</section>
+      {% if view === "internal" and (warnings.length or legacyUnscopedWarningCount) %}<section class="panel"><h2>审计明细</h2>{% if warnings.length %}<p class="panel-note">{{ warnings.length }} 条数据质量警告。</p><details><summary>查看规范化警告标识</summary><ul>{% for warning in warnings %}<li>{{ warning.reason }} <span class="provenance">{{ warning.eventHash }}</span></li>{% endfor %}</ul></details>{% endif %}{% if legacyUnscopedWarningCount %}<p class="panel-note">{{ legacyUnscopedWarningCount }} 条全局旧警告无法归入 Project Profile。</p>{% endif %}</section>{% endif %}
     </main>
   </body>
 </html>`;
@@ -579,6 +579,7 @@ function renderReport(
     name: string;
     evidence: string;
     confidence: "high" | "medium" | "low";
+    confidenceLabel: string;
     suggested: boolean;
     commitId?: string;
     activeLabel: string;
@@ -586,18 +587,29 @@ function renderReport(
     evidenceCount: string;
   }>();
   const confidenceRank = { high: 3, medium: 2, low: 1 } as const;
+  const confidenceLabels = { high: "高", medium: "中", low: "低" } as const;
+  const evidenceLabels = {
+    "explicit-ticket": "明确票据",
+    "planning-reference": "规划文档",
+    branch: "分支",
+    "merge-subject": "合并提交主题",
+    "commit-subject": "提交主题",
+    path: "改动路径",
+    semantic: "语义推断"
+  } as const;
   for (const attribution of featureAttributions) {
     const existing = featureRows.get(attribution.featureId);
     if (existing && confidenceRank[existing.confidence] >= confidenceRank[attribution.confidence]) continue;
     const total = totalsByFeatureId.get(attribution.featureId);
     featureRows.set(attribution.featureId, {
       name: attribution.featureName,
-      evidence: attribution.evidence,
+      evidence: evidenceLabels[attribution.evidence],
       confidence: attribution.confidence,
+      confidenceLabel: confidenceLabels[attribution.confidence],
       suggested: attribution.suggested,
       ...(view === "internal" ? { commitId: attribution.commitId } : {}),
-      activeLabel: total ? `${total.activeMinutes} verified Active minutes` : "Not allocated",
-      runLabel: total ? `${total.runMinutes} verified Run minutes` : "Not allocated",
+      activeLabel: total ? `${total.activeMinutes} 分钟` : "未分配",
+      runLabel: total ? `${total.runMinutes} 分钟` : "未分配",
       evidenceCount: total ? String(total.evidenceCount) : "—"
     });
   }
@@ -605,32 +617,33 @@ function renderReport(
     if (featureRows.has(total.featureId)) continue;
     featureRows.set(total.featureId, {
       name: namesByFeatureId.get(total.featureId) ?? total.featureId,
-      evidence: "explicit interval link",
+      evidence: "已明确关联区间",
       confidence: "high",
+      confidenceLabel: confidenceLabels.high,
       suggested: false,
-      activeLabel: `${total.activeMinutes} verified Active minutes`,
-      runLabel: `${total.runMinutes} verified Run minutes`,
+      activeLabel: `${total.activeMinutes} 分钟`,
+      runLabel: `${total.runMinutes} 分钟`,
       evidenceCount: String(total.evidenceCount)
     });
   }
   return nunjucks.renderString(reportTemplate, {
     displayName,
     statusColor: hasData ? "#0f7b3e" : "#805b00",
-    statusLabel: hasData ? "Data available" : "No data",
+    statusLabel: hasData ? "数据可用" : "无数据",
     view,
-    viewLabel: view === "internal" ? "Internal report" : "Customer report",
+    viewLabel: view === "internal" ? "内部报告" : "客户报告",
     summary: view === "customer"
-      ? "This customer view contains only approved aggregated report fields."
+      ? "客户视图仅包含已批准的汇总报告字段。"
       : hasData
-        ? `${matchedEventCount} sanitized event${matchedEventCount === 1 ? "" : "s"} matched this Project Profile.`
-        : "No matching retained event metadata is available for this Project Profile.",
+        ? `${matchedEventCount} 条脱敏事件匹配此 Project Profile。`
+        : "此 Project Profile 没有可用的匹配事件元数据。",
     warnings,
     accounting,
     legacyUnscopedWarningCount,
-    dateRangeLabel: dateRange ? `${dateRange.from} through ${dateRange.to}` : undefined,
+    dateRangeLabel: dateRange ? `${dateRange.from} 至 ${dateRange.to}` : undefined,
     coverage: visibleCoverage.map((entry) => ({
       ...entry,
-      label: entry.status === "no-data" ? "no data — not zero time" : entry.status === "unknown" ? "unknown — no data claim" : "available"
+      label: entry.status === "no-data" ? "无数据（不代表零工时）" : entry.status === "unknown" ? "未知（不主张工时）" : "可用"
     })),
     coverageSummary,
     featureRows: [...featureRows.values()],

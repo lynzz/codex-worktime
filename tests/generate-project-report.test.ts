@@ -65,19 +65,19 @@ describe("generateProjectReport", () => {
 
     const html = await readFile(htmlPath, "utf8");
     expect(html).toContain("EQA Platform");
-    expect(html).toContain("Data available");
-    expect(html).toContain("Active Interval");
-    expect(html).toContain("Daily verified Active Interval");
+    expect(html).toContain("数据可用");
+    expect(html).toContain("活跃区间");
+    expect(html).toContain("按日活跃区间");
     expect(html).toContain("2026-08-22");
     expect(html).toContain("Billing export");
-    expect(html).toContain("explicit-ticket");
-    expect(html).toContain("Low-confidence suggestion");
-    expect(html).toContain("2 verified Active minutes");
+    expect(html).toContain("明确票据");
+    expect(html).toContain("低可信度建议");
+    expect(html).toContain("2 分钟");
     expect(html).toContain('class="metric-grid"');
     expect(html).toContain('class="summary-table"');
-    expect(html).toContain("Verified data · reporting summary");
-    expect(html).toContain("Feature attribution and verified minutes");
-    expect(html).toContain("Not allocated");
+    expect(html).toContain("已核验数据 · 汇总");
+    expect(html).toContain("功能归因与已核验分钟");
+    expect(html).toContain("未分配");
     expect(html).not.toContain("/private/eqa");
     const databaseContents = await readFile(databasePath, "latin1");
     const prohibitedValues = [
@@ -113,7 +113,7 @@ describe("generateProjectReport", () => {
     });
 
     expect(result.coverage).toBe("no-data");
-    expect(await readFile(htmlPath, "utf8")).toContain("No data");
+    expect(await readFile(htmlPath, "utf8")).toContain("无数据");
   });
 
   it("renders a customer-safe, Asia/Shanghai date-ranged view with verified, inferred, and no-data states", async () => {
@@ -156,14 +156,14 @@ describe("generateProjectReport", () => {
     });
 
     const html = await readFile(htmlPath, "utf8");
-    expect(html).toContain("Customer report");
-    expect(html).toContain("Verified data");
-    expect(html).toContain("Inferred delivery evidence");
-    expect(html).toContain("No-data and coverage");
-    expect(html).toContain("2026-08-22 through 2026-08-22 (Asia/Shanghai)");
-    expect(html).toContain("30 wall-clock minutes");
+    expect(html).toContain("客户报告");
+    expect(html).toContain("已核验数据");
+    expect(html).toContain("推断的交付证据");
+    expect(html).toContain("无数据与覆盖情况");
+    expect(html).toContain("2026-08-22 至 2026-08-22 (Asia/Shanghai)");
+    expect(html).toContain("30 分钟");
     expect(html).toContain("Billing export");
-    expect(html).toContain("low confidence");
+    expect(html).toContain("低可信度");
     expect(html).not.toContain("PRIVATE_SESSION_SENTINEL");
     expect(html).not.toContain("INTERNAL_COMMIT_SENTINEL");
     expect(html).not.toContain("sourceEventIds");
@@ -187,7 +187,7 @@ describe("generateProjectReport", () => {
     });
 
     expect(result.coverage).toBe("no-data");
-    expect(await readFile(htmlPath, "utf8")).toContain("No data");
+    expect(await readFile(htmlPath, "utf8")).toContain("无数据");
   });
 
   it("requires an Asia/Shanghai date range for a customer report", async () => {
@@ -258,8 +258,8 @@ describe("generateProjectReport", () => {
     });
 
     expect(result.matchedEventCount).toBe(2);
-    expect(await readFile(htmlPath, "utf8")).toContain("2 sanitized events");
-    expect(await readFile(htmlPath, "utf8")).toContain("1 data-quality warning");
+    expect(await readFile(htmlPath, "utf8")).toContain("2 条脱敏事件");
+    expect(await readFile(htmlPath, "utf8")).toContain("1 条数据质量警告");
     expect(await readFile(htmlPath, "utf8")).toContain("invalid-timestamp");
   });
 
@@ -380,7 +380,7 @@ describe("generateProjectReport", () => {
       })
     ]);
 
-    expect(await readFile(htmlPath, "utf8")).toContain("2 sanitized events");
+    expect(await readFile(htmlPath, "utf8")).toContain("2 条脱敏事件");
   });
 
   it("keeps stored invalid-timestamp warnings visible after a later refresh", async () => {

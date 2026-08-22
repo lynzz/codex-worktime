@@ -88,16 +88,16 @@ describe("importHistoricalJsonl", () => {
 
     const html = await readFile(htmlPath, "utf8");
     const database = await readFile(databasePath, "latin1");
-    expect(html).toContain("2026-08-22: available");
-    expect(html).toContain("2026-08-23: no data");
-    expect(html).toContain("2026-08-24: unknown");
+    expect(html).toContain("2026-08-22: 可用");
+    expect(html).toContain("2026-08-23: 无数据（不代表零工时）");
+    expect(html).toContain("2026-08-24: 未知（不主张工时）");
     expect(html).not.toContain("PROMPT_SENTINEL");
     expect(html).not.toContain("ASSISTANT_SENTINEL");
     expect(html).not.toContain("parent-secret");
     expect(database).not.toContain("PROMPT_SENTINEL");
     expect(database).not.toContain("ASSISTANT_SENTINEL");
     expect(database).not.toContain("parent-secret");
-    expect(html).toContain("2 sanitized events matched");
+    expect(html).toContain("2 条脱敏事件匹配");
   });
 
   it("marks a range unknown when a historical source cannot be read", async () => {

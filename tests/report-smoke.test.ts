@@ -36,11 +36,11 @@ describe("offline report smoke flow", () => {
       htmlPath: validPath
     });
 
-    expect(await readFile(emptyPath, "utf8")).toContain("No data");
-    expect(await readFile(missingPath, "utf8")).toContain("unknown — no data claim");
+    expect(await readFile(emptyPath, "utf8")).toContain("无数据");
+    expect(await readFile(missingPath, "utf8")).toContain("未知（不主张工时）");
     const valid = await readFile(validPath, "utf8");
-    expect(valid).toContain("Verified data");
-    expect(valid).toContain("5 wall-clock minutes");
-    expect(valid).toContain("No inferred Feature attribution was supplied; no low-confidence attribution is claimed");
+    expect(valid).toContain("已核验数据");
+    expect(valid).toContain("5 分钟");
+    expect(valid).toContain("未提供推断的功能归因，因此不主张低可信度归因");
   });
 });

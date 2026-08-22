@@ -66,7 +66,7 @@ describe("hook command", () => {
     }
 
     const [html, database] = await Promise.all([readFile(htmlPath, "utf8"), readFile(databasePath, "utf8")]);
-    expect(html).toContain("1 sanitized event");
+    expect(html).toContain("1 条脱敏事件");
     for (const sensitiveValue of [
       "TRANSCRIPT_SENTINEL",
       "PROMPT_SENTINEL",
