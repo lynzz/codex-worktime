@@ -1,0 +1,209 @@
+import { mkdtemp, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+
+import { generateProjectReport } from "../src/reporting/generate-project-report.js";
+
+const profile = {
+  id: "eqa-platform",
+  displayName: "EQA Platform",
+  roots: [
+    { id: "score", path: "/private/eqa/score" },
+    { id: "charts", path: "/private/eqa/charts" }
+  ]
+};
+
+describe("generateProjectReport", () => {
+  it("unifies matching roots and produces a privacy-safe offline report", async () => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "codex-worktime-report-"));
+    const databasePath = join(outputDirectory, "analytics.sqlite");
+    const htmlPath = join(outputDirectory, "report.html");
+
+    const result = await generateProjectReport({
+      profile,
+      events: [
+        {
+          id: "event-1",
+          occurredAt: "2026-08-22T01:00:00Z",
+          type: "UserPromptSubmit",
+          cwd: "/private/eqa/score",
+          sessionId: "session-secret",
+          turnId: "turn-secret",
+          prompt: "PROMPT_SENTINEL",
+          assistantReply: "ASSISTANT_REPLY_SENTINEL",
+          transcriptPath: "TRANSCRIPT_PATH_SENTINEL",
+          toolArguments: "TOOL_ARGUMENTS_SENTINEL",
+          toolOutput: "TOOL_OUTPUT_SENTINEL",
+          apiKey: "API_KEY_SENTINEL",
+          token: "TOKEN_SENTINEL",
+          gitRemote: "GIT_REMOTE_SENTINEL"
+        },
+        {
+          id: "event-2",
+          occurredAt: "2026-08-22T01:02:00Z",
+          type: "Stop",
+          cwd: "/private/eqa/charts",
+          sessionId: "session-secret",
+          turnId: "turn-secret",
+          toolOutput: "TOOL_OUTPUT_SENTINEL"
+        }
+      ],
+      databasePath,
+      htmlPath,
+      applicationDataDirectory: outputDirectory
+    });
+
+    expect(result).toEqual({ matchedEventCount: 2, coverage: "available", htmlPath });
+
+    const html = await readFile(htmlPath, "utf8");
+    expect(html).toContain("EQA Platform");
+    expect(html).toContain("Data available");
+    expect(html).not.toContain("/private/eqa");
+    const databaseContents = await readFile(databasePath, "latin1");
+    const prohibitedValues = [
+      "/private/eqa",
+      "PROMPT_SENTINEL",
+      "ASSISTANT_REPLY_SENTINEL",
+      "TRANSCRIPT_PATH_SENTINEL",
+      "TOOL_ARGUMENTS_SENTINEL",
+      "TOOL_OUTPUT_SENTINEL",
+      "API_KEY_SENTINEL",
+      "TOKEN_SENTINEL",
+      "GIT_REMOTE_SENTINEL"
+    ];
+    for (const value of prohibitedValues) {
+      expect(html).not.toContain(value);
+      expect(databaseContents).not.toContain(value);
+    }
+    expect(html).not.toContain("session-secret");
+
+    expect(databaseContents.length).toBeGreaterThan(0);
+  });
+
+  it("marks an empty Project Profile as no data instead of zero time", async () => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "codex-worktime-report-"));
+    const htmlPath = join(outputDirectory, "report.html");
+
+    const result = await generateProjectReport({
+      profile,
+      events: [],
+      databasePath: join(outputDirectory, "analytics.sqlite"),
+      htmlPath,
+      applicationDataDirectory: outputDirectory
+    });
+
+    expect(result.coverage).toBe("no-data");
+    expect(await readFile(htmlPath, "utf8")).toContain("No data");
+  });
+
+  it("ignores duplicate and invalid events while preserving valid data", async () => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "codex-worktime-report-"));
+    const htmlPath = join(outputDirectory, "report.html");
+
+    const result = await generateProjectReport({
+      profile,
+      events: [
+        {
+          id: "event-1",
+          occurredAt: "2026-08-22T01:00:00Z",
+          type: "UserPromptSubmit",
+          cwd: "/private/eqa/score",
+          turnId: "turn-1"
+        },
+        {
+          id: "event-1",
+          occurredAt: "2026-08-22T01:00:00Z",
+          type: "UserPromptSubmit",
+          cwd: "/private/eqa/score",
+          turnId: "turn-1"
+        },
+        {
+          id: "event-3",
+          occurredAt: "2026-08-22T01:01:00Z",
+          type: "Stop",
+          cwd: "/private/eqa/score",
+          turnId: "turn-1"
+        },
+        {
+          id: "event-2",
+          occurredAt: "not-a-timestamp",
+          type: "Stop",
+          cwd: "/private/eqa/score"
+        }
+      ],
+      databasePath: join(outputDirectory, "analytics.sqlite"),
+      htmlPath,
+      applicationDataDirectory: outputDirectory
+    });
+
+    expect(result.matchedEventCount).toBe(2);
+    expect(await readFile(htmlPath, "utf8")).toContain("2 sanitized events");
+    expect(await readFile(htmlPath, "utf8")).toContain("1 data-quality warning");
+    expect(await readFile(htmlPath, "utf8")).toContain("invalid-timestamp");
+  });
+
+  it("refuses to store analytics inside a configured project root", async () => {
+    await expect(
+      generateProjectReport({
+        profile,
+        events: [],
+        databasePath: "/private/eqa/score/analytics.sqlite",
+        htmlPath: "/tmp/report.html",
+        applicationDataDirectory: "/private/eqa"
+      })
+    ).rejects.toThrow("outside configured project roots");
+  });
+
+  it("reports late and unclosed lifecycle event sequences without persisting their details", async () => {
+    const outputDirectory = await mkdtemp(join(tmpdir(), "codex-worktime-report-"));
+    const htmlPath = join(outputDirectory, "report.html");
+
+    await generateProjectReport({
+      profile,
+      events: [
+        {
+          id: "late-post",
+          occurredAt: "2026-08-22T01:00:00Z",
+          type: "PostToolUse",
+          cwd: "/private/eqa/score",
+          sessionId: "session-1",
+          turnId: "turn-1"
+        },
+        {
+          id: "late-pre",
+          occurredAt: "2026-08-22T01:01:00Z",
+          type: "PreToolUse",
+          cwd: "/private/eqa/score",
+          sessionId: "session-1",
+          turnId: "turn-1"
+        },
+        {
+          id: "first-prompt",
+          occurredAt: "2026-08-22T01:02:00Z",
+          type: "UserPromptSubmit",
+          cwd: "/private/eqa/score",
+          sessionId: "session-1",
+          turnId: "turn-2"
+        },
+        {
+          id: "second-prompt",
+          occurredAt: "2026-08-22T01:03:00Z",
+          type: "UserPromptSubmit",
+          cwd: "/private/eqa/score",
+          sessionId: "session-1",
+          turnId: "turn-3"
+        }
+      ],
+      databasePath: join(outputDirectory, "analytics.sqlite"),
+      htmlPath,
+      applicationDataDirectory: outputDirectory
+    });
+
+    const html = await readFile(htmlPath, "utf8");
+    expect(html).toContain("unmatched-tool-post");
+    expect(html).toContain("missing-tool-post");
+    expect(html).toContain("missing-turn-stop");
+    expect(html).not.toContain("session-1");
+  });
+});
