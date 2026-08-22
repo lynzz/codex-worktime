@@ -55,7 +55,7 @@ const eventSchema = z.object({
   toolUseId: z.string().min(1).optional(),
   agentId: z.string().min(1).optional(),
   parentSessionId: z.string().min(1).optional(),
-  source: z.enum(["fixture", "history", "hook"]).default("fixture")
+  source: z.enum(["fixture", "history", "claude-history", "hook"]).default("fixture")
 });
 
 const coverageEntrySchema = z.object({
@@ -138,7 +138,7 @@ type StoredEvent = {
   toolUseHash: string | null;
   agentHash: string | null;
   lineageHash: string | null;
-  source: "fixture" | "history" | "hook";
+  source: "fixture" | "history" | "claude-history" | "hook";
 };
 
 type EventNormalization = {
@@ -211,6 +211,7 @@ const reportTemplate = `<!doctype html>
         <table class="summary-table"><thead><tr><th>指标</th><th>已核验值</th><th>说明</th></tr></thead><tbody>
           <tr><td>活跃区间</td><td class="number">{{ accounting.active.wallClockMinutes }} 分钟</td><td>由完整的 UserPromptSubmit → Stop 区间构成。</td></tr>
           <tr><td>运行区间</td><td class="number">{{ accounting.run.wallClockMinutes }} 分钟</td><td>由完整的 PreToolUse → PostToolUse 区间构成。</td></tr>
+          <tr><td>采集来源</td><td class="number">{{ sourceSummary }}</td><td>仅保留时间、项目目录和生命周期元数据；不保留对话正文。</td></tr>
           <tr><td>数据覆盖</td><td class="number">{{ coverageSummary.available }} 天可用 / {{ coverageSummary.unknown }} 天未知 / {{ coverageSummary.noData }} 天无数据</td><td>未知或无数据都不代表零工时。</td></tr>
         </tbody></table></section>
       <section class="panel"><h2>{% if view === "internal" %}已核验区间、提交节奏与数据覆盖{% else %}已核验区间与数据覆盖{% endif %}</h2>
@@ -567,6 +568,7 @@ function renderReport(
   commitEstimates: readonly FeatureCommitEstimate[],
   dailyCommitSummaries: readonly DailyCommitSummary[],
   dailyCommitEstimates: readonly DailyCommitEstimate[],
+  sourceCounts: readonly { source: StoredEvent["source"]; eventCount: number }[],
   view: "internal" | "customer",
   dateRange: ReportingDateRange | undefined
 ): string {
@@ -586,6 +588,12 @@ function renderReport(
   const commitEstimateTotalHours = commitEstimateTotalMinutes / 60;
   const commitEstimateTotalDays = commitEstimateTotalHours / 8;
   const commitEstimateTotalCost = commitEstimateTotalDays * 1200;
+  const sourceLabels: Record<StoredEvent["source"], string> = {
+    fixture: "测试数据",
+    history: "Codex",
+    "claude-history": "Claude Code",
+    hook: "Codex Hook"
+  };
   const dailyRows = new Map<string, { date: string; activeLabel: string; commitCount?: number; commitSummary?: string; commitEstimateMinutes?: number; commitEstimateSummary?: string; coverageLabel?: string }>();
   for (const entry of accounting.active.daily) dailyRows.set(entry.date, { date: entry.date, activeLabel: `${entry.minutes} 分钟` });
   for (const entry of dailyCommitSummaries) {
@@ -693,6 +701,9 @@ function renderReport(
         : "此 Project Profile 没有可用的匹配事件元数据。",
     warnings,
     accounting,
+    sourceSummary: sourceCounts.length
+      ? sourceCounts.map((entry) => `${sourceLabels[entry.source]} ${entry.eventCount} 条`).join(" · ")
+      : "无匹配事件",
     legacyUnscopedWarningCount,
     dateRangeLabel: dateRange ? `${dateRange.from} 至 ${dateRange.to}` : undefined,
     coverage: renderedCoverage,
@@ -767,6 +778,14 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
           return date >= dateRange.from && date <= dateRange.to;
         }).length
         : storedEvents.length;
+      const sourceCounts = [...storedEvents
+        .filter((event) => !dateRange || (() => {
+          const date = Temporal.Instant.from(event.occurredAt).toZonedDateTimeISO("Asia/Shanghai").toPlainDate().toString();
+          return date >= dateRange.from && date <= dateRange.to;
+        })())
+        .reduce((counts, event) => counts.set(event.source, (counts.get(event.source) ?? 0) + 1), new Map<StoredEvent["source"], number>())]
+        .map(([source, eventCount]) => ({ source, eventCount }))
+        .sort((left, right) => left.source.localeCompare(right.source));
       const resolvedCoverage = storedCoverage;
       const coverageForRange = dateRange
         ? storedCoverage.filter((entry) => entry.date >= dateRange.from && entry.date <= dateRange.to)
@@ -788,6 +807,7 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
         commitReportData.estimates,
         commitReportData.dailySummaries,
         commitReportData.dailyEstimates,
+        sourceCounts,
         view,
         dateRange
       );

@@ -76,6 +76,7 @@ describe("generateProjectReport", () => {
     expect(html).toContain('class="metric-grid"');
     expect(html).toContain('class="summary-table"');
     expect(html).toContain("已核验数据 · 汇总");
+    expect(html).toContain("测试数据 2 条");
     expect(html).toContain("功能归因与已核验分钟");
     expect(html).toContain("已核验区间、提交节奏与数据覆盖");
     expect(html).toContain("提交节奏推测（非核验）");
