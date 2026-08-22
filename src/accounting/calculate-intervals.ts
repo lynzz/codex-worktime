@@ -99,7 +99,8 @@ export function calculateIntervals(events: readonly AccountingEvent[]): Interval
   const run: Interval[] = [];
   const openTurns = new Map<string, (typeof ordered)[number]>();
   const openTools = new Map<string, (typeof ordered)[number]>();
-  const stream = (event: (typeof ordered)[number]) => event.parentSessionId ?? event.sessionId ?? event.agentId ?? event.id;
+  const stream = (event: (typeof ordered)[number]) =>
+    event.parentSessionId ?? event.sessionId ?? event.turnId ?? event.agentId ?? event.id;
 
   for (const event of ordered) {
     const streamKey = stream(event);

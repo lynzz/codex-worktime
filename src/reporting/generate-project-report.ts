@@ -8,6 +8,8 @@ import Database from "better-sqlite3";
 import nunjucks from "nunjucks";
 import { z } from "zod";
 
+import { calculateIntervals, type IntervalCalculation } from "../accounting/calculate-intervals.js";
+
 const safeIdentifierSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/);
 let temporaryOutputSequence = 0;
 let pendingInProcessRefresh = Promise.resolve();
@@ -127,6 +129,9 @@ const reportTemplate = `<!doctype html>
       <h1>{{ displayName }}</h1>
       <p class="status">{{ statusLabel }}</p>
       <p>{{ summary }}</p>
+      <h2>Verified intervals</h2>
+      <p>Active Interval: {{ accounting.active.wallClockMinutes }} wall-clock minutes ({{ accounting.active.parallelMachineMinutes }} parallel-machine minutes).</p>
+      <p>Run Interval: {{ accounting.run.wallClockMinutes }} wall-clock minutes ({{ accounting.run.parallelMachineMinutes }} parallel-machine minutes).</p>
       {% if coverage.length %}
         <h2>Coverage</h2>
         <ul>{% for entry in coverage %}<li>{{ entry.date }}: {{ entry.label }}</li>{% endfor %}</ul>
@@ -476,7 +481,8 @@ function renderReport(
   matchedEventCount: number,
   warnings: readonly DataQualityWarning[],
   coverage: readonly CoverageEntry[],
-  legacyUnscopedWarningCount: number
+  legacyUnscopedWarningCount: number,
+  accounting: IntervalCalculation
 ): string {
   const hasData = matchedEventCount > 0;
   return nunjucks.renderString(reportTemplate, {
@@ -487,6 +493,7 @@ function renderReport(
       ? `${matchedEventCount} sanitized event${matchedEventCount === 1 ? "" : "s"} matched this Project Profile.`
       : "No matching retained event metadata is available for this Project Profile.",
     warnings,
+    accounting,
     legacyUnscopedWarningCount,
     coverage: coverage.map((entry) => ({
       ...entry,
@@ -520,7 +527,17 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
       const invalidTimestampWarnings = normalized.warnings.filter((warning) => warning.reason === "invalid-timestamp");
       storeEvents(database, profile.id, normalized.events, invalidTimestampWarnings, coverage);
       const storedEvents = readStoredEvents(database, profile.id);
-      const sequenceWarnings = calculateSequenceWarnings(storedEvents);
+      const accounting = calculateIntervals(storedEvents.map((event) => ({
+        id: event.eventHash,
+        type: event.eventType,
+        occurredAt: event.occurredAt,
+        sessionId: event.sessionHash ?? undefined,
+        turnId: event.turnHash ?? undefined,
+        toolUseId: event.toolUseHash ?? undefined,
+        agentId: event.agentHash ?? undefined,
+        parentSessionId: event.lineageHash ?? undefined
+      })));
+      const sequenceWarnings = accounting.warnings.map((warning) => ({ eventHash: warning.eventId, reason: warning.reason }));
       replaceSequenceWarnings(database, profile.id, sequenceWarnings);
       const persistedInvalidTimestampWarnings = readPersistedInvalidTimestampWarnings(database, profile.id);
       const legacyUnscopedWarningCount = countLegacyUnscopedWarnings(database);
@@ -538,7 +555,8 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
         matchedEventCount,
         [...persistedInvalidTimestampWarnings, ...sequenceWarnings],
         resolvedCoverage,
-        legacyUnscopedWarningCount
+        legacyUnscopedWarningCount,
+        accounting
       );
       database.exec("COMMIT");
       transactionStarted = false;
