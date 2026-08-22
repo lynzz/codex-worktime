@@ -68,7 +68,7 @@ const featureAttributionSchema = z.object({
   evidence: z.enum(["explicit-ticket", "planning-reference", "branch", "merge-subject", "commit-subject", "path", "semantic"]),
   confidence: z.enum(["high", "medium", "low"]),
   suggested: z.boolean()
-});
+}).refine((value) => value.confidence !== "low" || value.suggested, "Low-confidence attribution must be a suggestion");
 const featureIntervalTotalSchema = z.object({
   featureId: safeIdentifierSchema,
   activeMinutes: z.number().nonnegative(),

@@ -32,6 +32,18 @@ function open(options: StorageOptions): Database.Database {
       reason TEXT NOT NULL
     )
   `);
+  const legacyColumns = database.prepare("PRAGMA table_info(attribution_overrides)").all() as { name: string }[];
+  if (legacyColumns.some((column) => column.name === "active")) {
+    const legacyRows = database.prepare(`SELECT id, reason, active, revoked_reason FROM attribution_overrides`).all() as { id: string; reason: string; active: number; revoked_reason: string | null }[];
+    const insertEvent = database.prepare(`INSERT OR IGNORE INTO attribution_override_events (override_id, event_type, reason) VALUES (?, ?, ?)`);
+    const migrate = database.transaction(() => {
+      for (const row of legacyRows) {
+        insertEvent.run(row.id, "applied", row.reason);
+        if (row.active === 0) insertEvent.run(row.id, "revoked", row.revoked_reason ?? "Migrated legacy revocation");
+      }
+    });
+    migrate();
+  }
   return database;
 }
 
