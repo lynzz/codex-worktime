@@ -59,6 +59,9 @@ describe("generateProjectReport", () => {
     const html = await readFile(htmlPath, "utf8");
     expect(html).toContain("EQA Platform");
     expect(html).toContain("Data available");
+    expect(html).toContain("Active Interval");
+    expect(html).toContain("Daily verified Active Interval");
+    expect(html).toContain("2026-08-22");
     expect(html).not.toContain("/private/eqa");
     const databaseContents = await readFile(databasePath, "latin1");
     const prohibitedValues = [

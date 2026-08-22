@@ -18,8 +18,8 @@ export type AccountingEvent = {
 type Warning = { eventId: string; reason: "missing-turn-stop" | "missing-tool-post" | "unmatched-tool-post" | "invalid-timestamp" };
 type Bucket = { date: string; minutes: number };
 type WeekBucket = { week: string; minutes: number };
-type Totals = { wallClockMinutes: number; parallelMachineMinutes: number; daily: Bucket[]; weekly: WeekBucket[] };
-type Interval = { start: number; end: number };
+type Totals = { wallClockMinutes: number; parallelMachineMinutes: number; daily: Bucket[]; weekly: WeekBucket[]; intervals: { start: string; end: string; sourceEventIds: string[] }[] };
+type Interval = { start: number; end: number; startEventId: string; endEventId: string };
 
 export type IntervalCalculation = { active: Totals; run: Totals; warnings: Warning[] };
 
@@ -32,7 +32,10 @@ function union(intervals: readonly Interval[]): Interval[] {
   for (const interval of [...intervals].sort((a, b) => a.start - b.start || a.end - b.end)) {
     const previous = result.at(-1);
     if (previous && interval.start <= previous.end) {
-      previous.end = Math.max(previous.end, interval.end);
+      if (interval.end > previous.end) {
+        previous.end = interval.end;
+        previous.endEventId = interval.endEventId;
+      }
     } else {
       result.push({ ...interval });
     }
@@ -76,6 +79,11 @@ function totals(intervals: readonly Interval[]): Totals {
   return {
     wallClockMinutes: merged.reduce((sum, interval) => sum + minutes(interval.start, interval.end), 0),
     parallelMachineMinutes: intervals.reduce((sum, interval) => sum + minutes(interval.start, interval.end), 0),
+    intervals: merged.map((interval) => ({
+      start: Temporal.Instant.fromEpochMilliseconds(interval.start).toString(),
+      end: Temporal.Instant.fromEpochMilliseconds(interval.end).toString(),
+      sourceEventIds: [interval.startEventId, interval.endEventId]
+    })),
     ...buckets
   };
 }
@@ -100,7 +108,7 @@ export function calculateIntervals(events: readonly AccountingEvent[]): Interval
   const openTurns = new Map<string, (typeof ordered)[number]>();
   const openTools = new Map<string, (typeof ordered)[number]>();
   const stream = (event: (typeof ordered)[number]) =>
-    event.parentSessionId ?? event.sessionId ?? event.turnId ?? event.agentId ?? event.id;
+    event.sessionId ?? event.turnId ?? event.agentId ?? event.parentSessionId ?? event.id;
 
   for (const event of ordered) {
     const streamKey = stream(event);
@@ -111,7 +119,7 @@ export function calculateIntervals(events: readonly AccountingEvent[]): Interval
     } else if (event.type === "Stop") {
       const start = openTurns.get(streamKey);
       if (start) {
-        if (event.epochMilliseconds >= start.epochMilliseconds) active.push({ start: start.epochMilliseconds, end: event.epochMilliseconds });
+        if (event.epochMilliseconds >= start.epochMilliseconds) active.push({ start: start.epochMilliseconds, end: event.epochMilliseconds, startEventId: start.id, endEventId: event.id });
         openTurns.delete(streamKey);
       }
     } else if (event.type === "PreToolUse") {
@@ -122,7 +130,7 @@ export function calculateIntervals(events: readonly AccountingEvent[]): Interval
       if (!start || event.epochMilliseconds < start.epochMilliseconds) {
         warnings.push({ eventId: event.id, reason: "unmatched-tool-post" });
       } else {
-        run.push({ start: start.epochMilliseconds, end: event.epochMilliseconds });
+        run.push({ start: start.epochMilliseconds, end: event.epochMilliseconds, startEventId: start.id, endEventId: event.id });
         openTools.delete(key);
       }
     }

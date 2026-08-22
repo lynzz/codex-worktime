@@ -16,6 +16,9 @@ describe("calculateIntervals", () => {
 
     expect(result.active.wallClockMinutes).toBe(15);
     expect(result.active.parallelMachineMinutes).toBe(20);
+    expect(result.active.intervals).toEqual([
+      { start: "2026-08-22T01:00:00Z", end: "2026-08-22T01:15:00Z", sourceEventIds: ["turn-a", "turn-b-stop"] }
+    ]);
     expect(result.run.wallClockMinutes).toBe(6);
     expect(result.warnings).toContainEqual({ eventId: "incomplete", reason: "missing-turn-stop" });
   });
@@ -34,5 +37,17 @@ describe("calculateIntervals", () => {
     expect(result.active.weekly).toEqual([
       { week: "2026-W34", minutes: 60 }
     ]);
+  });
+
+  it("unions forked lineage intervals instead of adding subagent wall-clock time twice", () => {
+    const result = calculateIntervals([
+      { id: "parent-start", type: "UserPromptSubmit", occurredAt: "2026-08-22T01:00:00Z", sessionId: "parent", turnId: "parent-turn" },
+      { id: "child-start", type: "UserPromptSubmit", occurredAt: "2026-08-22T01:05:00Z", sessionId: "child", parentSessionId: "parent", turnId: "child-turn", agentId: "child-agent" },
+      { id: "parent-stop", type: "Stop", occurredAt: "2026-08-22T01:10:00Z", sessionId: "parent", turnId: "parent-turn" },
+      { id: "child-stop", type: "Stop", occurredAt: "2026-08-22T01:15:00Z", sessionId: "child", parentSessionId: "parent", turnId: "child-turn", agentId: "child-agent" }
+    ]);
+
+    expect(result.active.wallClockMinutes).toBe(15);
+    expect(result.active.parallelMachineMinutes).toBe(20);
   });
 });

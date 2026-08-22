@@ -132,6 +132,11 @@ const reportTemplate = `<!doctype html>
       <h2>Verified intervals</h2>
       <p>Active Interval: {{ accounting.active.wallClockMinutes }} wall-clock minutes ({{ accounting.active.parallelMachineMinutes }} parallel-machine minutes).</p>
       <p>Run Interval: {{ accounting.run.wallClockMinutes }} wall-clock minutes ({{ accounting.run.parallelMachineMinutes }} parallel-machine minutes).</p>
+      <h3>Daily verified Active Interval (Asia/Shanghai)</h3>
+      <ul>{% for entry in accounting.active.daily %}<li>{{ entry.date }}: {{ entry.minutes }} minutes</li>{% endfor %}</ul>
+      <h3>Weekly verified Active Interval (Asia/Shanghai)</h3>
+      <ul>{% for entry in accounting.active.weekly %}<li>{{ entry.week }}: {{ entry.minutes }} minutes</li>{% endfor %}</ul>
+      <p>{{ accounting.active.intervals.length }} Active Interval union segment{% if accounting.active.intervals.length !== 1 %}s{% endif %}; each is traceable to its retained boundary event identities.</p>
       {% if coverage.length %}
         <h2>Coverage</h2>
         <ul>{% for entry in coverage %}<li>{{ entry.date }}: {{ entry.label }}</li>{% endfor %}</ul>
