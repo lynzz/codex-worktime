@@ -109,7 +109,7 @@ type EventNormalization = {
 
 type DataQualityWarning = {
   eventHash: string;
-  reason: "invalid-timestamp" | "missing-turn-stop" | "missing-tool-post" | "unmatched-tool-post" | "out-of-order-tool-event" | "negative-tool-interval";
+  reason: "invalid-timestamp" | "missing-turn-stop" | "missing-tool-post" | "unmatched-tool-post" | "out-of-order-tool-event" | "negative-tool-interval" | "out-of-order-turn-event";
 };
 
 const reportTemplate = `<!doctype html>
@@ -138,6 +138,9 @@ const reportTemplate = `<!doctype html>
       <ul>{% for entry in accounting.active.weekly %}<li>{{ entry.week }}: {{ entry.minutes }} minutes</li>{% endfor %}</ul>
       <p>{{ accounting.active.intervals.length }} Active Interval union segment{% if accounting.active.intervals.length !== 1 %}s{% endif %}; each is traceable to its retained boundary event identities.</p>
       <ul>{% for interval in accounting.active.intervals %}<li>{{ interval.start }}–{{ interval.end }}: {{ interval.sourceEventIds | join(', ') }}</li>{% endfor %}</ul>
+      <p>Active and Run totals are wall-clock unions; overlapping segments are deduplicated rather than added.</p>
+      <p>{{ accounting.run.intervals.length }} Run Interval union segment{% if accounting.run.intervals.length !== 1 %}s{% endif %}.</p>
+      <ul>{% for interval in accounting.run.intervals %}<li>{{ interval.start }}–{{ interval.end }}: {{ interval.sourceEventIds | join(', ') }}</li>{% endfor %}</ul>
       {% if coverage.length %}
         <h2>Coverage</h2>
         <ul>{% for entry in coverage %}<li>{{ entry.date }}: {{ entry.label }}</li>{% endfor %}</ul>
@@ -434,7 +437,7 @@ function readStoredEvents(database: Database.Database, projectId: string): Store
       SELECT rowid AS sequence, event_hash AS eventHash, root_id AS rootId, occurred_at AS occurredAt,
         event_type AS eventType, session_hash AS sessionHash, turn_hash AS turnHash,
         tool_use_hash AS toolUseHash, agent_hash AS agentHash, lineage_hash AS lineageHash, source
-      FROM events WHERE project_id = ?
+      FROM events WHERE project_id = ? ORDER BY rowid
     `)
     .all(projectId) as StoredEvent[];
 }
@@ -447,7 +450,7 @@ function replaceSequenceWarnings(
   database
     .prepare(`
       DELETE FROM data_quality_warnings
-      WHERE reason IN ('missing-turn-stop', 'missing-tool-post', 'unmatched-tool-post', 'out-of-order-tool-event', 'negative-tool-interval')
+      WHERE reason IN ('missing-turn-stop', 'missing-tool-post', 'unmatched-tool-post', 'out-of-order-tool-event', 'negative-tool-interval', 'out-of-order-turn-event')
         AND project_id = ?
     `)
     .run(projectId);

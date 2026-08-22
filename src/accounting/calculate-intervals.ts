@@ -15,7 +15,7 @@ export type AccountingEvent = {
   parentSessionId?: string;
 };
 
-type Warning = { eventId: string; reason: "missing-turn-stop" | "missing-tool-post" | "unmatched-tool-post" | "invalid-timestamp" | "out-of-order-tool-event" | "negative-tool-interval" };
+type Warning = { eventId: string; reason: "missing-turn-stop" | "missing-tool-post" | "unmatched-tool-post" | "invalid-timestamp" | "out-of-order-tool-event" | "negative-tool-interval" | "out-of-order-turn-event" };
 type Bucket = { date: string; minutes: number };
 type WeekBucket = { week: string; minutes: number };
 type Totals = { wallClockMinutes: number; parallelMachineMinutes: number; daily: Bucket[]; weekly: WeekBucket[]; intervals: { start: string; end: string; sourceEventIds: string[] }[] };
@@ -137,9 +137,13 @@ export function calculateIntervals(events: readonly AccountingEvent[]): Interval
       const key = event.turnId ? turnKey(event) : currentTurnByStream.get(streamKey);
       const start = key ? openTurns.get(key) : undefined;
       if (start) {
-        if (event.epochMilliseconds >= start.epochMilliseconds) active.push({ start: start.epochMilliseconds, end: event.epochMilliseconds, startEventId: start.id, endEventId: event.id, sourceEventIds: [start.id, event.id] });
-        openTurns.delete(key!);
-        if (currentTurnByStream.get(streamKey) === key) currentTurnByStream.delete(streamKey);
+        if (event.epochMilliseconds < start.epochMilliseconds) {
+          warnings.push({ eventId: event.id, reason: "out-of-order-turn-event" });
+        } else {
+          active.push({ start: start.epochMilliseconds, end: event.epochMilliseconds, startEventId: start.id, endEventId: event.id, sourceEventIds: [start.id, event.id] });
+          openTurns.delete(key!);
+          if (currentTurnByStream.get(streamKey) === key) currentTurnByStream.delete(streamKey);
+        }
       }
     } else if (event.type === "PreToolUse") {
       const key = toolKey(event);
