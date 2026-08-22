@@ -170,6 +170,12 @@ const reportTemplate = `<!doctype html>
       .hero-copy { max-width: 42rem; margin: 1rem 0 0; color: #d8eafa; }
       .status { display: inline-flex; margin: 1.35rem 0 0; padding: .42rem .72rem; border-radius: 999px; background: rgba(255,255,255,.13); color: #fff; font-size: .85rem; font-weight: 750; }
       .report-range { margin: .65rem 0 0; color: #d8eafa; font-size: .9rem; }
+      .estimate-overview { display: grid; grid-template-columns: 1.35fr repeat(2, 1fr); gap: 1px; margin: 1.25rem 0; overflow: hidden; border: 1px solid #c6d9ee; border-radius: 1rem; background: #c6d9ee; box-shadow: 0 .7rem 1.7rem rgba(31, 62, 93, .08); }
+      .estimate-overview > div { padding: 1.2rem 1.3rem; background: #f8fbff; }
+      .estimate-overview > div:first-child { background: #e7f1ff; }
+      .estimate-label { display: block; color: #28557f; font-size: .76rem; font-weight: 800; letter-spacing: .07em; }
+      .estimate-value { display: block; margin-top: .45rem; color: #102a43; font-size: clamp(1.35rem, 3vw, 2rem); font-weight: 850; letter-spacing: -.045em; }
+      .estimate-note { display: block; margin-top: .35rem; color: #60708a; font-size: .82rem; line-height: 1.4; }
       .metric-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin: 1.25rem 0; }
       .metric { min-height: 8.75rem; padding: 1.25rem; border: 1px solid #dce6f2; border-radius: 1rem; background: #fff; box-shadow: 0 .5rem 1.5rem rgba(31, 62, 93, .06); }
       .metric-label { display: block; color: #60708a; font-size: .78rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
@@ -189,12 +195,13 @@ const reportTemplate = `<!doctype html>
       details { margin-top: 1rem; }
       summary { cursor: pointer; color: #28557f; font-weight: 750; }
       .provenance { word-break: break-all; color: #60708a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .78rem; }
-      @media (max-width: 40rem) { body { padding: 1rem .75rem 2rem; } .hero, .panel { padding: 1.15rem; } .metric-grid { grid-template-columns: 1fr; } th, td { padding: .65rem; } .hide-small { display: none; } }
+      @media (max-width: 40rem) { body { padding: 1rem .75rem 2rem; } .hero, .panel { padding: 1.15rem; } .estimate-overview, .metric-grid { grid-template-columns: 1fr; } th, td { padding: .65rem; } .hide-small { display: none; } }
     </style>
   </head>
   <body>
     <main>
       <header class="hero"><p class="eyebrow">Codex Worktime · {{ viewLabel }}</p><h1>{{ displayName }}</h1><p class="hero-copy">{{ summary }}</p><p class="status">{{ statusLabel }}</p>{% if dateRangeLabel %}<p class="report-range">{{ dateRangeLabel }} (Asia/Shanghai)</p>{% endif %}</header>
+      {% if view === "internal" and commitEstimateTotalMinutes %}<section class="estimate-overview" aria-label="提交节奏推测总工时与费用"><div><span class="estimate-label">推测总工时（非核验）</span><strong class="estimate-value">{{ commitEstimateTotalHours }} 小时</strong><span class="estimate-note">约 {{ commitEstimateTotalDays }} 人天（8 小时 / 人天）</span></div><div><span class="estimate-label">推测费用</span><strong class="estimate-value">{{ commitEstimateTotalCost }}</strong><span class="estimate-note">按 ¥1,200 / 人天估算</span></div><div><span class="estimate-label">估算口径</span><strong class="estimate-value">提交节奏</strong><span class="estimate-note">不是已核验 AI 或人工工时</span></div></section>{% endif %}
       <section class="metric-grid" aria-label="已核验指标">
         <article class="metric"><span class="metric-label">活跃区间</span><strong class="metric-value">{{ accounting.active.wallClockMinutes }} 分钟</strong><p class="metric-note">已核验的墙钟时间并集{% if view === "internal" %}；{{ accounting.active.parallelMachineMinutes }} 分钟并行机器时间{% endif %}。</p></article>
         <article class="metric"><span class="metric-label">运行区间</span><strong class="metric-value">{{ accounting.run.wallClockMinutes }} 分钟</strong><p class="metric-note">仅统计可观察的工具执行或等待。</p></article>
@@ -577,6 +584,9 @@ function renderReport(
     { available: 0, unknown: 0, noData: 0 }
   );
   const commitEstimateTotalMinutes = commitEstimates.reduce((total, estimate) => total + estimate.estimatedMinutes, 0);
+  const commitEstimateTotalHours = commitEstimateTotalMinutes / 60;
+  const commitEstimateTotalDays = commitEstimateTotalHours / 8;
+  const commitEstimateTotalCost = commitEstimateTotalDays * 1200;
   const visibleFeatureTotals = featureIntervalTotals
     .filter((total) => !dateRange || (total.dateRange?.from === dateRange.from && total.dateRange.to === dateRange.to))
     .filter((total) => view === "internal" || namesByFeatureId.has(total.featureId));
@@ -657,7 +667,9 @@ function renderReport(
       estimatedHours: (estimate.estimatedMinutes / 60).toFixed(1)
     })),
     commitEstimateTotalMinutes,
-    commitEstimateTotalHours: (commitEstimateTotalMinutes / 60).toFixed(1),
+    commitEstimateTotalHours: commitEstimateTotalHours.toFixed(1),
+    commitEstimateTotalDays: commitEstimateTotalDays.toFixed(1),
+    commitEstimateTotalCost: `¥${new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(commitEstimateTotalCost)}`,
     featureRows: [...featureRows.values()],
     featureTotalsUnavailableForRange: Boolean(dateRange && featureIntervalTotals.length && !featureIntervalTotals.some(
       (total) => total.dateRange?.from === dateRange.from && total.dateRange.to === dateRange.to
