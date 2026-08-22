@@ -61,10 +61,20 @@ const coverageEntrySchema = z.object({
   status: z.enum(["available", "no-data", "unknown"])
 });
 
+const featureAttributionSchema = z.object({
+  featureId: safeIdentifierSchema,
+  featureName: z.string().trim().min(1).max(120),
+  commitId: z.string().min(1),
+  evidence: z.enum(["explicit-ticket", "planning-reference", "branch", "merge-subject", "commit-subject", "path", "semantic"]),
+  confidence: z.enum(["high", "medium", "low"]),
+  suggested: z.boolean()
+});
+
 const inputSchema = z.object({
   profile: projectProfileSchema,
   events: z.array(eventSchema),
   coverage: z.array(coverageEntrySchema).default([]),
+  featureAttributions: z.array(featureAttributionSchema).default([]),
   databasePath: z.string().min(1),
   htmlPath: z.string().min(1)
 });
@@ -73,6 +83,7 @@ export type GenerateProjectReportInput = {
   profile: unknown;
   events: unknown;
   coverage?: unknown;
+  featureAttributions?: unknown;
   databasePath: string;
   htmlPath: string;
   applicationDataDirectory?: string;
@@ -144,6 +155,10 @@ const reportTemplate = `<!doctype html>
       {% if coverage.length %}
         <h2>Coverage</h2>
         <ul>{% for entry in coverage %}<li>{{ entry.date }}: {{ entry.label }}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if featureAttributions.length %}
+        <h2>Feature delivery evidence</h2>
+        <ul>{% for attribution in featureAttributions %}<li>{{ attribution.featureName }}: {{ attribution.evidence }} ({{ attribution.confidence }}){% if attribution.suggested %} — Low-confidence suggestion{% endif %}</li>{% endfor %}</ul>
       {% endif %}
       {% if warnings.length %}
         <p>{{ warnings.length }} data-quality warning{% if warnings.length !== 1 %}s{% endif %}.</p>
@@ -491,7 +506,8 @@ function renderReport(
   warnings: readonly DataQualityWarning[],
   coverage: readonly CoverageEntry[],
   legacyUnscopedWarningCount: number,
-  accounting: IntervalCalculation
+  accounting: IntervalCalculation,
+  featureAttributions: readonly z.output<typeof featureAttributionSchema>[]
 ): string {
   const hasData = matchedEventCount > 0;
   return nunjucks.renderString(reportTemplate, {
@@ -507,7 +523,8 @@ function renderReport(
     coverage: coverage.map((entry) => ({
       ...entry,
       label: entry.status === "no-data" ? "no data" : entry.status
-    }))
+    })),
+    featureAttributions
   });
 }
 
@@ -519,7 +536,7 @@ async function writeOfflineReport(htmlPath: string, contents: string): Promise<v
 }
 
 export async function generateProjectReport(input: GenerateProjectReportInput): Promise<ProjectReportResult> {
-  const { profile, events, coverage, databasePath, htmlPath } = inputSchema.parse(input);
+  const { profile, events, coverage, featureAttributions, databasePath, htmlPath } = inputSchema.parse(input);
   const dataDirectory = resolve(input.applicationDataDirectory ?? applicationDataDirectory());
   ensureStorageOutsideProjectRoots(databasePath, dataDirectory, profile.roots);
   const normalized = normalizeMatchingEvents(events, profile.roots);
@@ -565,7 +582,8 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
         [...persistedInvalidTimestampWarnings, ...sequenceWarnings],
         resolvedCoverage,
         legacyUnscopedWarningCount,
-        accounting
+        accounting,
+        featureAttributions
       );
       database.exec("COMMIT");
       transactionStarted = false;

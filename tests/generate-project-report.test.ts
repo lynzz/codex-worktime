@@ -49,6 +49,10 @@ describe("generateProjectReport", () => {
           toolOutput: "TOOL_OUTPUT_SENTINEL"
         }
       ],
+      featureAttributions: [
+        { featureId: "billing", featureName: "Billing export", commitId: "commit-hash", evidence: "explicit-ticket", confidence: "high", suggested: false },
+        { featureId: "search", featureName: "Search", commitId: "commit-hash-2", evidence: "semantic", confidence: "low", suggested: true }
+      ],
       databasePath,
       htmlPath,
       applicationDataDirectory: outputDirectory
@@ -62,6 +66,9 @@ describe("generateProjectReport", () => {
     expect(html).toContain("Active Interval");
     expect(html).toContain("Daily verified Active Interval");
     expect(html).toContain("2026-08-22");
+    expect(html).toContain("Billing export");
+    expect(html).toContain("explicit-ticket");
+    expect(html).toContain("Low-confidence suggestion");
     expect(html).not.toContain("/private/eqa");
     const databaseContents = await readFile(databasePath, "latin1");
     const prohibitedValues = [
