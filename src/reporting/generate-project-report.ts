@@ -69,12 +69,19 @@ const featureAttributionSchema = z.object({
   confidence: z.enum(["high", "medium", "low"]),
   suggested: z.boolean()
 });
+const featureIntervalTotalSchema = z.object({
+  featureId: safeIdentifierSchema,
+  activeMinutes: z.number().nonnegative(),
+  runMinutes: z.number().nonnegative(),
+  evidenceCount: z.number().int().positive()
+});
 
 const inputSchema = z.object({
   profile: projectProfileSchema,
   events: z.array(eventSchema),
   coverage: z.array(coverageEntrySchema).default([]),
   featureAttributions: z.array(featureAttributionSchema).default([]),
+  featureIntervalTotals: z.array(featureIntervalTotalSchema).default([]),
   databasePath: z.string().min(1),
   htmlPath: z.string().min(1)
 });
@@ -84,6 +91,7 @@ export type GenerateProjectReportInput = {
   events: unknown;
   coverage?: unknown;
   featureAttributions?: unknown;
+  featureIntervalTotals?: unknown;
   databasePath: string;
   htmlPath: string;
   applicationDataDirectory?: string;
@@ -159,6 +167,10 @@ const reportTemplate = `<!doctype html>
       {% if featureAttributions.length %}
         <h2>Feature delivery evidence</h2>
         <ul>{% for attribution in featureAttributions %}<li>{{ attribution.featureName }}: {{ attribution.evidence }} ({{ attribution.confidence }}){% if attribution.suggested %} — Low-confidence suggestion{% endif %}</li>{% endfor %}</ul>
+      {% endif %}
+      {% if featureIntervalTotals.length %}
+        <h2>Feature-linked verified intervals</h2>
+        <ul>{% for total in featureIntervalTotals %}<li>{{ total.featureId }}: {{ total.activeMinutes }} verified Active minutes; {{ total.runMinutes }} verified Run minutes ({{ total.evidenceCount }} explicit evidence link{% if total.evidenceCount !== 1 %}s{% endif %}).</li>{% endfor %}</ul>
       {% endif %}
       {% if warnings.length %}
         <p>{{ warnings.length }} data-quality warning{% if warnings.length !== 1 %}s{% endif %}.</p>
@@ -507,7 +519,8 @@ function renderReport(
   coverage: readonly CoverageEntry[],
   legacyUnscopedWarningCount: number,
   accounting: IntervalCalculation,
-  featureAttributions: readonly z.output<typeof featureAttributionSchema>[]
+  featureAttributions: readonly z.output<typeof featureAttributionSchema>[],
+  featureIntervalTotals: readonly z.output<typeof featureIntervalTotalSchema>[]
 ): string {
   const hasData = matchedEventCount > 0;
   return nunjucks.renderString(reportTemplate, {
@@ -524,7 +537,8 @@ function renderReport(
       ...entry,
       label: entry.status === "no-data" ? "no data" : entry.status
     })),
-    featureAttributions
+    featureAttributions,
+    featureIntervalTotals
   });
 }
 
@@ -536,7 +550,7 @@ async function writeOfflineReport(htmlPath: string, contents: string): Promise<v
 }
 
 export async function generateProjectReport(input: GenerateProjectReportInput): Promise<ProjectReportResult> {
-  const { profile, events, coverage, featureAttributions, databasePath, htmlPath } = inputSchema.parse(input);
+  const { profile, events, coverage, featureAttributions, featureIntervalTotals, databasePath, htmlPath } = inputSchema.parse(input);
   const dataDirectory = resolve(input.applicationDataDirectory ?? applicationDataDirectory());
   ensureStorageOutsideProjectRoots(databasePath, dataDirectory, profile.roots);
   const normalized = normalizeMatchingEvents(events, profile.roots);
@@ -583,7 +597,8 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
         resolvedCoverage,
         legacyUnscopedWarningCount,
         accounting,
-        featureAttributions
+        featureAttributions,
+        featureIntervalTotals
       );
       database.exec("COMMIT");
       transactionStarted = false;
