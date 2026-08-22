@@ -15,11 +15,11 @@ export type AccountingEvent = {
   parentSessionId?: string;
 };
 
-type Warning = { eventId: string; reason: "missing-turn-stop" | "missing-tool-post" | "unmatched-tool-post" | "invalid-timestamp" };
+type Warning = { eventId: string; reason: "missing-turn-stop" | "missing-tool-post" | "unmatched-tool-post" | "invalid-timestamp" | "out-of-order-tool-event" | "negative-tool-interval" };
 type Bucket = { date: string; minutes: number };
 type WeekBucket = { week: string; minutes: number };
 type Totals = { wallClockMinutes: number; parallelMachineMinutes: number; daily: Bucket[]; weekly: WeekBucket[]; intervals: { start: string; end: string; sourceEventIds: string[] }[] };
-type Interval = { start: number; end: number; startEventId: string; endEventId: string };
+type Interval = { start: number; end: number; startEventId: string; endEventId: string; sourceEventIds: string[] };
 
 export type IntervalCalculation = { active: Totals; run: Totals; warnings: Warning[] };
 
@@ -36,6 +36,7 @@ function union(intervals: readonly Interval[]): Interval[] {
         previous.end = interval.end;
         previous.endEventId = interval.endEventId;
       }
+      previous.sourceEventIds = [...new Set([...previous.sourceEventIds, ...interval.sourceEventIds])];
     } else {
       result.push({ ...interval });
     }
@@ -82,7 +83,7 @@ function totals(intervals: readonly Interval[]): Totals {
     intervals: merged.map((interval) => ({
       start: Temporal.Instant.fromEpochMilliseconds(interval.start).toString(),
       end: Temporal.Instant.fromEpochMilliseconds(interval.end).toString(),
-      sourceEventIds: [interval.startEventId, interval.endEventId]
+      sourceEventIds: interval.sourceEventIds
     })),
     ...buckets
   };
@@ -91,51 +92,80 @@ function totals(intervals: readonly Interval[]): Totals {
 export function calculateIntervals(events: readonly AccountingEvent[]): IntervalCalculation {
   const warnings: Warning[] = [];
   const seen = new Set<string>();
+  const seenLineageLifecycleIdentities = new Set<string>();
   const ordered: Array<AccountingEvent & { epochMilliseconds: number; sequence: number }> = [];
   for (const [sequence, event] of events.entries()) {
     if (seen.has(event.id)) continue;
     seen.add(event.id);
     try {
+      const lineageRoot = event.parentSessionId ?? event.sessionId;
+      const identityPart = event.toolUseId ?? event.turnId;
+      if (
+        lineageRoot && identityPart && ["UserPromptSubmit", "Stop", "PreToolUse", "PostToolUse"].includes(event.type)
+      ) {
+        const lineageIdentity = `${lineageRoot}:${event.type}:${identityPart}`;
+        if (seenLineageLifecycleIdentities.has(lineageIdentity)) continue;
+        seenLineageLifecycleIdentities.add(lineageIdentity);
+      }
       ordered.push({ ...event, epochMilliseconds: Temporal.Instant.from(event.occurredAt).epochMilliseconds, sequence });
     } catch {
       warnings.push({ eventId: event.id, reason: "invalid-timestamp" });
     }
   }
-  ordered.sort((left, right) => left.epochMilliseconds - right.epochMilliseconds || left.sequence - right.sequence);
-
   const active: Interval[] = [];
   const run: Interval[] = [];
   const openTurns = new Map<string, (typeof ordered)[number]>();
+  const currentTurnByStream = new Map<string, string>();
   const openTools = new Map<string, (typeof ordered)[number]>();
+  const pendingToolPosts = new Map<string, (typeof ordered)[number]>();
   const stream = (event: (typeof ordered)[number]) =>
     event.sessionId ?? event.turnId ?? event.agentId ?? event.parentSessionId ?? event.id;
+  const turnKey = (event: (typeof ordered)[number]) => `${stream(event)}:${event.turnId ?? "current"}`;
+  const toolKey = (event: (typeof ordered)[number]) => `${stream(event)}:${event.toolUseId ?? event.id}`;
 
   for (const event of ordered) {
     const streamKey = stream(event);
     if (event.type === "UserPromptSubmit") {
-      const previous = openTurns.get(streamKey);
+      const previousKey = currentTurnByStream.get(streamKey);
+      const previous = previousKey ? openTurns.get(previousKey) : undefined;
       if (previous) warnings.push({ eventId: previous.id, reason: "missing-turn-stop" });
-      openTurns.set(streamKey, event);
+      if (previousKey) openTurns.delete(previousKey);
+      const key = turnKey(event);
+      openTurns.set(key, event);
+      currentTurnByStream.set(streamKey, key);
     } else if (event.type === "Stop") {
-      const start = openTurns.get(streamKey);
+      const key = event.turnId ? turnKey(event) : currentTurnByStream.get(streamKey);
+      const start = key ? openTurns.get(key) : undefined;
       if (start) {
-        if (event.epochMilliseconds >= start.epochMilliseconds) active.push({ start: start.epochMilliseconds, end: event.epochMilliseconds, startEventId: start.id, endEventId: event.id });
-        openTurns.delete(streamKey);
+        if (event.epochMilliseconds >= start.epochMilliseconds) active.push({ start: start.epochMilliseconds, end: event.epochMilliseconds, startEventId: start.id, endEventId: event.id, sourceEventIds: [start.id, event.id] });
+        openTurns.delete(key!);
+        if (currentTurnByStream.get(streamKey) === key) currentTurnByStream.delete(streamKey);
       }
     } else if (event.type === "PreToolUse") {
-      openTools.set(`${streamKey}:${event.toolUseId ?? event.id}`, event);
-    } else if (event.type === "PostToolUse") {
-      const key = `${streamKey}:${event.toolUseId ?? event.id}`;
-      const start = openTools.get(key);
-      if (!start || event.epochMilliseconds < start.epochMilliseconds) {
-        warnings.push({ eventId: event.id, reason: "unmatched-tool-post" });
+      const key = toolKey(event);
+      const earlierPost = pendingToolPosts.get(key);
+      if (earlierPost) {
+        warnings.push({ eventId: earlierPost.id, reason: "out-of-order-tool-event" });
+        pendingToolPosts.delete(key);
       } else {
-        run.push({ start: start.epochMilliseconds, end: event.epochMilliseconds, startEventId: start.id, endEventId: event.id });
+        openTools.set(key, event);
+      }
+    } else if (event.type === "PostToolUse") {
+      const key = toolKey(event);
+      const start = openTools.get(key);
+      if (!start) {
+        pendingToolPosts.set(key, event);
+      } else if (event.epochMilliseconds < start.epochMilliseconds) {
+        warnings.push({ eventId: event.id, reason: "negative-tool-interval" });
+        openTools.delete(key);
+      } else {
+        run.push({ start: start.epochMilliseconds, end: event.epochMilliseconds, startEventId: start.id, endEventId: event.id, sourceEventIds: [start.id, event.id] });
         openTools.delete(key);
       }
     }
   }
   for (const event of openTurns.values()) warnings.push({ eventId: event.id, reason: "missing-turn-stop" });
   for (const event of openTools.values()) warnings.push({ eventId: event.id, reason: "missing-tool-post" });
+  for (const event of pendingToolPosts.values()) warnings.push({ eventId: event.id, reason: "unmatched-tool-post" });
   return { active: totals(active), run: totals(run), warnings };
 }

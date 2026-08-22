@@ -109,7 +109,7 @@ type EventNormalization = {
 
 type DataQualityWarning = {
   eventHash: string;
-  reason: "invalid-timestamp" | "missing-turn-stop" | "missing-tool-post" | "unmatched-tool-post";
+  reason: "invalid-timestamp" | "missing-turn-stop" | "missing-tool-post" | "unmatched-tool-post" | "out-of-order-tool-event" | "negative-tool-interval";
 };
 
 const reportTemplate = `<!doctype html>
@@ -137,6 +137,7 @@ const reportTemplate = `<!doctype html>
       <h3>Weekly verified Active Interval (Asia/Shanghai)</h3>
       <ul>{% for entry in accounting.active.weekly %}<li>{{ entry.week }}: {{ entry.minutes }} minutes</li>{% endfor %}</ul>
       <p>{{ accounting.active.intervals.length }} Active Interval union segment{% if accounting.active.intervals.length !== 1 %}s{% endif %}; each is traceable to its retained boundary event identities.</p>
+      <ul>{% for interval in accounting.active.intervals %}<li>{{ interval.start }}–{{ interval.end }}: {{ interval.sourceEventIds | join(', ') }}</li>{% endfor %}</ul>
       {% if coverage.length %}
         <h2>Coverage</h2>
         <ul>{% for entry in coverage %}<li>{{ entry.date }}: {{ entry.label }}</li>{% endfor %}</ul>
@@ -446,7 +447,7 @@ function replaceSequenceWarnings(
   database
     .prepare(`
       DELETE FROM data_quality_warnings
-      WHERE reason IN ('missing-turn-stop', 'missing-tool-post', 'unmatched-tool-post')
+      WHERE reason IN ('missing-turn-stop', 'missing-tool-post', 'unmatched-tool-post', 'out-of-order-tool-event', 'negative-tool-interval')
         AND project_id = ?
     `)
     .run(projectId);

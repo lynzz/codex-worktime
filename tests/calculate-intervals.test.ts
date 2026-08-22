@@ -17,7 +17,7 @@ describe("calculateIntervals", () => {
     expect(result.active.wallClockMinutes).toBe(15);
     expect(result.active.parallelMachineMinutes).toBe(20);
     expect(result.active.intervals).toEqual([
-      { start: "2026-08-22T01:00:00Z", end: "2026-08-22T01:15:00Z", sourceEventIds: ["turn-a", "turn-b-stop"] }
+      { start: "2026-08-22T01:00:00Z", end: "2026-08-22T01:15:00Z", sourceEventIds: ["turn-a", "turn-a-stop", "turn-b", "turn-b-stop"] }
     ]);
     expect(result.run.wallClockMinutes).toBe(6);
     expect(result.warnings).toContainEqual({ eventId: "incomplete", reason: "missing-turn-stop" });
@@ -49,5 +49,42 @@ describe("calculateIntervals", () => {
 
     expect(result.active.wallClockMinutes).toBe(15);
     expect(result.active.parallelMachineMinutes).toBe(20);
+  });
+
+  it("deduplicates a non-overlapping resumed lineage continuation with the same Turn identity", () => {
+    const result = calculateIntervals([
+      { id: "original-prompt", type: "UserPromptSubmit", occurredAt: "2026-08-22T01:00:00Z", sessionId: "original", turnId: "turn" },
+      { id: "original-stop", type: "Stop", occurredAt: "2026-08-22T01:05:00Z", sessionId: "original", turnId: "turn" },
+      { id: "resumed-prompt", type: "UserPromptSubmit", occurredAt: "2026-08-22T02:00:00Z", sessionId: "resumed", parentSessionId: "original", turnId: "turn" },
+      { id: "resumed-stop", type: "Stop", occurredAt: "2026-08-22T02:05:00Z", sessionId: "resumed", parentSessionId: "original", turnId: "turn" }
+    ]);
+
+    expect(result.active.wallClockMinutes).toBe(5);
+  });
+
+  it("does not let a late Stop close a later Turn in the same Session", () => {
+    const result = calculateIntervals([
+      { id: "prompt-a", type: "UserPromptSubmit", occurredAt: "2026-08-22T01:00:00Z", sessionId: "session", turnId: "a" },
+      { id: "prompt-b", type: "UserPromptSubmit", occurredAt: "2026-08-22T01:01:00Z", sessionId: "session", turnId: "b" },
+      { id: "late-stop-a", type: "Stop", occurredAt: "2026-08-22T01:02:00Z", sessionId: "session", turnId: "a" },
+      { id: "stop-b", type: "Stop", occurredAt: "2026-08-22T01:03:00Z", sessionId: "session", turnId: "b" }
+    ]);
+
+    expect(result.active.wallClockMinutes).toBe(2);
+    expect(result.warnings).toContainEqual({ eventId: "prompt-a", reason: "missing-turn-stop" });
+  });
+
+  it("reports a single normalized warning for out-of-order and negative tool boundaries", () => {
+    const result = calculateIntervals([
+      { id: "post-before-pre", type: "PostToolUse", occurredAt: "2026-08-22T01:00:00Z", sessionId: "session", turnId: "turn", toolUseId: "out-of-order" },
+      { id: "pre-after-post", type: "PreToolUse", occurredAt: "2026-08-22T01:01:00Z", sessionId: "session", turnId: "turn", toolUseId: "out-of-order" },
+      { id: "negative-pre", type: "PreToolUse", occurredAt: "2026-08-22T01:03:00Z", sessionId: "session", turnId: "turn", toolUseId: "negative" },
+      { id: "negative-post", type: "PostToolUse", occurredAt: "2026-08-22T01:02:00Z", sessionId: "session", turnId: "turn", toolUseId: "negative" }
+    ]);
+
+    expect(result.warnings).toEqual([
+      { eventId: "post-before-pre", reason: "out-of-order-tool-event" },
+      { eventId: "negative-post", reason: "negative-tool-interval" }
+    ]);
   });
 });
