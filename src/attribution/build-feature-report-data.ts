@@ -4,12 +4,19 @@ import type { AttributionOverride } from "./attribution-overrides.js";
 
 export function buildFeatureReportData(input: { features: readonly Feature[]; commits: readonly CommitEvidence[]; intervals: readonly VerifiedInterval[]; links: readonly FeatureIntervalLink[]; overrides?: readonly AttributionOverride[] }) {
   const derived = deriveFeatureAttributions({ features: input.features, commits: input.commits });
+  const replacements = new Map(
+    input.overrides?.filter((override) => override.active).map((override) => [override.original.featureId, override.replacementFeatureId]) ?? []
+  );
   const featureAttributions = derived.map((attribution) => {
-    const override = input.overrides?.find((candidate) => candidate.active && candidate.original.commitId === attribution.commitId && candidate.original.featureId === attribution.featureId);
-    return override ? { ...attribution, featureId: override.replacementFeatureId } : attribution;
+    const replacementFeatureId = replacements.get(attribution.featureId);
+    const replacement = input.features.find((feature) => feature.id === replacementFeatureId);
+    return replacement ? { ...attribution, featureId: replacement.id, featureName: replacement.name } : attribution;
   });
   return {
     featureAttributions,
-    featureIntervalTotals: aggregateFeatureIntervals({ intervals: input.intervals, links: input.links })
+    featureIntervalTotals: aggregateFeatureIntervals({
+      intervals: input.intervals,
+      links: input.links.map((link) => ({ ...link, featureId: replacements.get(link.featureId) ?? link.featureId }))
+    })
   };
 }
