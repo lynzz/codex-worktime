@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import { estimateFeatureCommitTime, type CommitTimingEvidence, type FeatureCommitEstimate } from "./estimate-feature-commit-time.js";
+import { estimateFeatureCommitTime, summarizeCommitsByDay, type CommitTimingEvidence, type DailyCommitSummary, type FeatureCommitEstimate } from "./estimate-feature-commit-time.js";
 
 const executeFile = promisify(execFile);
 
@@ -36,7 +36,12 @@ async function readRootCommits(root: ProjectRoot, dateRange: { from: string; to:
   }
 }
 
-export async function readProjectCommitEstimates(input: { roots: readonly ProjectRoot[]; dateRange: { from: string; to: string } }): Promise<FeatureCommitEstimate[]> {
+export type ProjectCommitReportData = {
+  estimates: FeatureCommitEstimate[];
+  dailySummaries: DailyCommitSummary[];
+};
+
+export async function readProjectCommitReportData(input: { roots: readonly ProjectRoot[]; dateRange: { from: string; to: string } }): Promise<ProjectCommitReportData> {
   const commits = (await Promise.all(input.roots.map((root) => readRootCommits(root, input.dateRange)))).flat();
-  return estimateFeatureCommitTime(commits);
+  return { estimates: estimateFeatureCommitTime(commits), dailySummaries: summarizeCommitsByDay(commits) };
 }

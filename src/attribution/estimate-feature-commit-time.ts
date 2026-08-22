@@ -11,6 +11,12 @@ export type FeatureCommitEstimate = {
   estimatedMinutes: number;
 };
 
+export type DailyCommitSummary = {
+  date: string;
+  commitCount: number;
+  summary: string;
+};
+
 const maximumGapMinutes = 60;
 
 function featureForSubject(subject: string): Pick<FeatureCommitEstimate, "featureKey" | "featureName"> {
@@ -24,15 +30,44 @@ function featureForSubject(subject: string): Pick<FeatureCommitEstimate, "featur
   return { featureKey: `subject:${summary.toLocaleLowerCase()}`, featureName: summary };
 }
 
+function uniqueCommits(commits: readonly CommitTimingEvidence[]): CommitTimingEvidence[] {
+  return [...new Map(commits.map((commit) => [commit.id, commit])).values()];
+}
+
+export function summarizeCommitsByDay(commits: readonly CommitTimingEvidence[]): DailyCommitSummary[] {
+  const days = new Map<string, Map<string, { name: string; count: number }>>();
+  for (const commit of uniqueCommits(commits)) {
+    let date: string;
+    try {
+      date = Temporal.Instant.from(commit.authoredAt).toZonedDateTimeISO("Asia/Shanghai").toPlainDate().toString();
+    } catch {
+      continue;
+    }
+    const feature = featureForSubject(commit.subject);
+    const features = days.get(date) ?? new Map();
+    const value = features.get(feature.featureKey) ?? { name: feature.featureName, count: 0 };
+    value.count += 1;
+    features.set(feature.featureKey, value);
+    days.set(date, features);
+  }
+  return [...days.entries()]
+    .map(([date, features]) => {
+      const grouped = [...features.values()].sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
+      const commitCount = grouped.reduce((count, feature) => count + feature.count, 0);
+      const displayed = grouped.slice(0, 3).map((feature) => `${feature.name} × ${feature.count}`);
+      const remainingCount = grouped.length - displayed.length;
+      return { date, commitCount, summary: `${displayed.join(" · ")}${remainingCount ? ` · 等 ${remainingCount} 项` : ""}` };
+    })
+    .sort((left, right) => left.date.localeCompare(right.date));
+}
+
 /**
  * Estimates work only from immediately consecutive commits with the same
  * Conventional Commit scope. It deliberately does not bridge a change of
  * scope or charge time to the first commit in a sequence.
  */
 export function estimateFeatureCommitTime(commits: readonly CommitTimingEvidence[]): FeatureCommitEstimate[] {
-  const uniqueCommits = new Map<string, CommitTimingEvidence>();
-  for (const commit of commits) uniqueCommits.set(commit.id, commit);
-  const ordered = [...uniqueCommits.values()].sort((left, right) => left.authoredAt.localeCompare(right.authoredAt));
+  const ordered = uniqueCommits(commits).sort((left, right) => left.authoredAt.localeCompare(right.authoredAt));
   const estimates = new Map<string, FeatureCommitEstimate>();
   let previous: { featureKey: string; timestamp: number } | undefined;
 
@@ -58,3 +93,4 @@ export function estimateFeatureCommitTime(commits: readonly CommitTimingEvidence
     .filter((estimate) => estimate.estimatedMinutes > 0)
     .sort((left, right) => right.estimatedMinutes - left.estimatedMinutes || right.commitCount - left.commitCount || left.featureName.localeCompare(right.featureName));
 }
+import { Temporal } from "@js-temporal/polyfill";

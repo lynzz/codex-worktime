@@ -9,8 +9,8 @@ import nunjucks from "nunjucks";
 import { z } from "zod";
 
 import { calculateIntervals, type IntervalCalculation, type ReportingDateRange } from "../accounting/calculate-intervals.js";
-import { readProjectCommitEstimates } from "../attribution/read-project-commit-estimates.js";
-import type { FeatureCommitEstimate } from "../attribution/estimate-feature-commit-time.js";
+import { readProjectCommitReportData } from "../attribution/read-project-commit-estimates.js";
+import type { DailyCommitSummary, FeatureCommitEstimate } from "../attribution/estimate-feature-commit-time.js";
 
 const safeIdentifierSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/);
 let temporaryOutputSequence = 0;
@@ -214,7 +214,7 @@ const reportTemplate = `<!doctype html>
           <tr><td>数据覆盖</td><td class="number">{{ coverageSummary.available }} 天可用 / {{ coverageSummary.unknown }} 天未知 / {{ coverageSummary.noData }} 天无数据</td><td>未知或无数据都不代表零工时。</td></tr>
         </tbody></table></section>
       <section class="panel"><h2>已核验区间明细</h2>
-        <h3>按日活跃区间（Asia/Shanghai）</h3><table class="detail-table"><thead><tr><th>日期</th><th>分钟</th></tr></thead><tbody>{% for entry in accounting.active.daily %}<tr><td>{{ entry.date }}</td><td class="number">{{ entry.minutes }}</td></tr>{% else %}<tr><td colspan="2" class="muted">本周期没有已核验的活跃区间。</td></tr>{% endfor %}</tbody></table>
+        <h3>按日活跃区间与提交历史（Asia/Shanghai）</h3><table class="detail-table"><thead><tr><th>日期</th><th>已核验活跃</th><th>提交历史汇总</th></tr></thead><tbody>{% for entry in dailyRows %}<tr><td>{{ entry.date }}</td><td class="number">{{ entry.activeLabel }}</td><td>{% if entry.commitCount %}<strong>{{ entry.commitCount }} 个提交</strong><br><span class="muted">{{ entry.commitSummary }}</span>{% else %}<span class="muted">—</span>{% endif %}</td></tr>{% else %}<tr><td colspan="3" class="muted">本周期没有已核验的活跃区间或提交记录。</td></tr>{% endfor %}</tbody></table>
         <h3>按周活跃区间（Asia/Shanghai）</h3><table class="detail-table"><thead><tr><th>周</th><th>分钟</th></tr></thead><tbody>{% for entry in accounting.active.weekly %}<tr><td>{{ entry.week }}</td><td class="number">{{ entry.minutes }}</td></tr>{% else %}<tr><td colspan="2" class="muted">本周期没有已核验的活跃区间。</td></tr>{% endfor %}</tbody></table>
       </section>
       <section class="panel"><h2>推断的交付证据 · 功能归因与已核验分钟</h2><p class="panel-note">Git 只提供交付证据。功能只有在审阅证据将其关联到已核验区间时才会获得分钟数；commit 时间戳绝不产生工时。</p>
@@ -568,6 +568,7 @@ function renderReport(
   featureAttributions: readonly z.output<typeof featureAttributionSchema>[],
   featureIntervalTotals: readonly z.output<typeof featureIntervalTotalSchema>[],
   commitEstimates: readonly FeatureCommitEstimate[],
+  dailyCommitSummaries: readonly DailyCommitSummary[],
   view: "internal" | "customer",
   dateRange: ReportingDateRange | undefined
 ): string {
@@ -587,6 +588,17 @@ function renderReport(
   const commitEstimateTotalHours = commitEstimateTotalMinutes / 60;
   const commitEstimateTotalDays = commitEstimateTotalHours / 8;
   const commitEstimateTotalCost = commitEstimateTotalDays * 1200;
+  const dailyRows = new Map<string, { date: string; activeLabel: string; commitCount?: number; commitSummary?: string }>();
+  for (const entry of accounting.active.daily) dailyRows.set(entry.date, { date: entry.date, activeLabel: `${entry.minutes} 分钟` });
+  for (const entry of dailyCommitSummaries) {
+    const existing = dailyRows.get(entry.date);
+    dailyRows.set(entry.date, {
+      date: entry.date,
+      activeLabel: existing?.activeLabel ?? "—",
+      commitCount: entry.commitCount,
+      commitSummary: entry.summary
+    });
+  }
   const visibleFeatureTotals = featureIntervalTotals
     .filter((total) => !dateRange || (total.dateRange?.from === dateRange.from && total.dateRange.to === dateRange.to))
     .filter((total) => view === "internal" || namesByFeatureId.has(total.featureId));
@@ -662,6 +674,7 @@ function renderReport(
       label: entry.status === "no-data" ? "无数据（不代表零工时）" : entry.status === "unknown" ? "未知（不主张工时）" : "可用"
     })),
     coverageSummary,
+    dailyRows: [...dailyRows.values()].sort((left, right) => left.date.localeCompare(right.date)),
     commitEstimates: commitEstimates.map((estimate) => ({
       ...estimate,
       estimatedHours: (estimate.estimatedMinutes / 60).toFixed(1)
@@ -692,9 +705,9 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
   const dataDirectory = resolve(input.applicationDataDirectory ?? applicationDataDirectory());
   ensureStorageOutsideProjectRoots(databasePath, dataDirectory, profile.roots);
   const normalized = normalizeMatchingEvents(events, profile.roots);
-  const commitEstimates = dateRange
-    ? await readProjectCommitEstimates({ roots: profile.roots, dateRange })
-    : [];
+  const commitReportData = dateRange
+    ? await readProjectCommitReportData({ roots: profile.roots, dateRange })
+    : { estimates: [], dailySummaries: [] };
 
   return serializeInProcessRefresh(async () => {
     await mkdir(dirname(databasePath), { recursive: true });
@@ -749,7 +762,8 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
         accounting,
         featureAttributions,
         featureIntervalTotals,
-        commitEstimates,
+        commitReportData.estimates,
+        commitReportData.dailySummaries,
         view,
         dateRange
       );

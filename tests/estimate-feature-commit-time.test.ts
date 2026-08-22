@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { estimateFeatureCommitTime } from "../src/attribution/estimate-feature-commit-time.js";
+import { estimateFeatureCommitTime, summarizeCommitsByDay } from "../src/attribution/estimate-feature-commit-time.js";
 
 describe("estimateFeatureCommitTime", () => {
   it("only accumulates immediately consecutive commits in the same scope and caps each gap at 60 minutes", () => {
@@ -19,5 +19,16 @@ describe("estimateFeatureCommitTime", () => {
       { id: "one", subject: "feat(report): first", authoredAt: "2026-07-01T09:00:00+08:00" },
       { id: "two", subject: "feat(admin): second", authoredAt: "2026-07-01T09:30:00+08:00" }
     ])).toEqual([]);
+  });
+
+  it("summarizes deduplicated commits by Asia/Shanghai day and keeps the three largest scopes", () => {
+    expect(summarizeCommitsByDay([
+      { id: "one", subject: "feat(report): first", authoredAt: "2026-07-01T16:30:00Z" },
+      { id: "two", subject: "fix(report): second", authoredAt: "2026-07-01T17:00:00Z" },
+      { id: "three", subject: "feat(admin): third", authoredAt: "2026-07-01T17:10:00Z" },
+      { id: "four", subject: "feat(analysis): fourth", authoredAt: "2026-07-01T17:20:00Z" },
+      { id: "five", subject: "feat(ui): fifth", authoredAt: "2026-07-01T17:30:00Z" },
+      { id: "five", subject: "feat(ui): duplicate", authoredAt: "2026-07-01T17:30:00Z" }
+    ])).toEqual([{ date: "2026-07-02", commitCount: 5, summary: "report（提交 scope） × 2 · admin（提交 scope） × 1 · analysis（提交 scope） × 1 · 等 1 项" }]);
   });
 });

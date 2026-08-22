@@ -67,7 +67,7 @@ describe("generateProjectReport", () => {
     expect(html).toContain("EQA Platform");
     expect(html).toContain("数据可用");
     expect(html).toContain("活跃区间");
-    expect(html).toContain("按日活跃区间");
+    expect(html).toContain("按日活跃区间与提交历史");
     expect(html).toContain("2026-08-22");
     expect(html).toContain("Billing export");
     expect(html).toContain("明确票据");
