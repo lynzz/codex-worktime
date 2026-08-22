@@ -17,6 +17,12 @@ export type DailyCommitSummary = {
   summary: string;
 };
 
+export type DailyCommitEstimate = {
+  date: string;
+  estimatedMinutes: number;
+  summary: string;
+};
+
 const maximumGapMinutes = 60;
 
 function featureForSubject(subject: string): Pick<FeatureCommitEstimate, "featureKey" | "featureName"> {
@@ -57,6 +63,38 @@ export function summarizeCommitsByDay(commits: readonly CommitTimingEvidence[]):
       const displayed = grouped.slice(0, 3).map((feature) => `${feature.name} × ${feature.count}`);
       const remainingCount = grouped.length - displayed.length;
       return { date, commitCount, summary: `${displayed.join(" · ")}${remainingCount ? ` · 等 ${remainingCount} 项` : ""}` };
+    })
+    .sort((left, right) => left.date.localeCompare(right.date));
+}
+
+export function summarizeEstimatedCommitTimeByDay(commits: readonly CommitTimingEvidence[]): DailyCommitEstimate[] {
+  const ordered = uniqueCommits(commits).sort((left, right) => left.authoredAt.localeCompare(right.authoredAt));
+  const days = new Map<string, Map<string, { name: string; minutes: number }>>();
+  let previous: { featureKey: string; timestamp: number } | undefined;
+  for (const commit of ordered) {
+    const timestamp = Date.parse(commit.authoredAt);
+    if (Number.isNaN(timestamp)) continue;
+    const feature = featureForSubject(commit.subject);
+    if (previous?.featureKey === feature.featureKey) {
+      const minutes = Math.min(Math.floor((timestamp - previous.timestamp) / 60_000), maximumGapMinutes);
+      if (minutes > 0) {
+        const date = Temporal.Instant.from(commit.authoredAt).toZonedDateTimeISO("Asia/Shanghai").toPlainDate().toString();
+        const features = days.get(date) ?? new Map();
+        const value = features.get(feature.featureKey) ?? { name: feature.featureName, minutes: 0 };
+        value.minutes += minutes;
+        features.set(feature.featureKey, value);
+        days.set(date, features);
+      }
+    }
+    previous = { featureKey: feature.featureKey, timestamp };
+  }
+  return [...days.entries()]
+    .map(([date, features]) => {
+      const grouped = [...features.values()].sort((left, right) => right.minutes - left.minutes || left.name.localeCompare(right.name));
+      const estimatedMinutes = grouped.reduce((total, feature) => total + feature.minutes, 0);
+      const displayed = grouped.slice(0, 3).map((feature) => `${feature.name} × ${feature.minutes} 分钟`);
+      const remainingCount = grouped.length - displayed.length;
+      return { date, estimatedMinutes, summary: `${displayed.join(" · ")}${remainingCount ? ` · 等 ${remainingCount} 项` : ""}` };
     })
     .sort((left, right) => left.date.localeCompare(right.date));
 }

@@ -10,7 +10,7 @@ import { z } from "zod";
 
 import { calculateIntervals, type IntervalCalculation, type ReportingDateRange } from "../accounting/calculate-intervals.js";
 import { readProjectCommitReportData } from "../attribution/read-project-commit-estimates.js";
-import type { DailyCommitSummary, FeatureCommitEstimate } from "../attribution/estimate-feature-commit-time.js";
+import type { DailyCommitEstimate, DailyCommitSummary, FeatureCommitEstimate } from "../attribution/estimate-feature-commit-time.js";
 
 const safeIdentifierSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/);
 let temporaryOutputSequence = 0;
@@ -214,10 +214,8 @@ const reportTemplate = `<!doctype html>
           <tr><td>数据覆盖</td><td class="number">{{ coverageSummary.available }} 天可用 / {{ coverageSummary.unknown }} 天未知 / {{ coverageSummary.noData }} 天无数据</td><td>未知或无数据都不代表零工时。</td></tr>
         </tbody></table></section>
       <section class="panel"><h2>{% if view === "internal" %}已核验区间、提交节奏与数据覆盖{% else %}已核验区间与数据覆盖{% endif %}</h2>
-        <h3>按日活跃、提交与覆盖情况（Asia/Shanghai）</h3><table class="detail-table"><thead><tr><th>日期</th><th>已核验活跃</th><th>提交历史汇总</th><th>无数据与覆盖情况</th></tr></thead><tbody>{% for entry in dailyRows %}<tr{% if entry.coverageLabel %} aria-label="{{ entry.date }}: {{ entry.coverageLabel }}"{% endif %}><td>{{ entry.date }}</td><td class="number">{{ entry.activeLabel }}</td><td>{% if entry.commitCount %}<strong>{{ entry.commitCount }} 个提交</strong><br><span class="muted">{{ entry.commitSummary }}</span>{% else %}<span class="muted">—</span>{% endif %}</td><td>{{ entry.coverageLabel or "无记录（不代表零工时）" }}</td></tr>{% else %}<tr><td colspan="4" class="muted">本周期没有已核验的活跃区间、提交记录或覆盖记录。</td></tr>{% endfor %}</tbody></table>
+        <h3>按日活跃、提交与覆盖情况（Asia/Shanghai）</h3>{% if view === "internal" %}<p class="panel-note">提交节奏推测只累计相邻且同一 scope 的提交间隔，每段最多 60 分钟；它不是已核验 AI 或人工工时。</p>{% endif %}<table class="detail-table"><thead><tr><th>日期</th><th>已核验活跃</th><th>提交历史汇总</th>{% if view === "internal" %}<th>提交节奏推测（非核验）</th>{% endif %}<th>无数据与覆盖情况</th></tr></thead><tbody>{% for entry in dailyRows %}<tr{% if entry.coverageLabel %} aria-label="{{ entry.date }}: {{ entry.coverageLabel }}"{% endif %}><td>{{ entry.date }}</td><td class="number">{{ entry.activeLabel }}</td><td>{% if entry.commitCount %}<strong>{{ entry.commitCount }} 个提交</strong><br><span class="muted">{{ entry.commitSummary }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>{% if view === "internal" %}<td>{% if entry.commitEstimateMinutes %}<strong class="number">{{ entry.commitEstimateMinutes }} 分钟</strong><br><span class="muted">{{ entry.commitEstimateSummary }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>{% endif %}<td>{{ entry.coverageLabel or "无记录（不代表零工时）" }}</td></tr>{% else %}<tr><td colspan="{% if view === \"internal\" %}5{% else %}4{% endif %}" class="muted">本周期没有已核验的活跃区间、提交记录或覆盖记录。</td></tr>{% endfor %}</tbody></table>
         <h3>按周活跃区间（Asia/Shanghai）</h3><table class="detail-table"><thead><tr><th>周</th><th>分钟</th></tr></thead><tbody>{% for entry in accounting.active.weekly %}<tr><td>{{ entry.week }}</td><td class="number">{{ entry.minutes }}</td></tr>{% else %}<tr><td colspan="2" class="muted">本周期没有已核验的活跃区间。</td></tr>{% endfor %}</tbody></table>
-        {% if view === "internal" %}<h3>提交节奏推测 · 按功能分组</h3><p class="panel-note">按 Conventional Commit 的 scope 自动分组：只有相邻且属于同一分组的提交才累计间隔，每段最多 60 分钟。它是提交节奏推测，不是已核验 AI 或人工工时。</p>{% if commitEstimates.length %}
-          <table class="detail-table"><thead><tr><th>功能分组</th><th>提交数</th><th>推测投入</th></tr></thead><tbody>{% for row in commitEstimates %}<tr><td><strong>{{ row.featureName }}</strong></td><td class="number">{{ row.commitCount }}</td><td class="number">{{ row.estimatedMinutes }} 分钟（约 {{ row.estimatedHours }} 小时）</td></tr>{% endfor %}</tbody></table><p class="panel-note">合计：{{ commitEstimateTotalMinutes }} 分钟（约 {{ commitEstimateTotalHours }} 小时）。</p>{% else %}<p class="panel-note">本报告范围内没有可推测的连续同功能提交。</p>{% endif %}{% endif %}
       </section>
       <section class="panel"><h2>推断的交付证据 · 功能归因与已核验分钟</h2><p class="panel-note">Git 只提供交付证据。功能只有在审阅证据将其关联到已核验区间时才会获得分钟数；commit 时间戳绝不产生工时。</p>
         <table class="detail-table"><thead><tr><th>功能</th><th>证据 / 可信度</th><th>已核验活跃</th><th>已核验运行</th>{% if view === "internal" %}<th>证据链接</th>{% endif %}</tr></thead><tbody>{% for row in featureRows %}<tr><td><strong>{{ row.name }}</strong>{% if row.suggested %}<br><span class="tag tag-low">低可信度建议</span>{% endif %}</td><td><span class="tag tag-{{ row.confidence }}">{{ row.evidence }}</span> <span class="muted">{{ row.confidenceLabel }}可信度</span>{% if view === "internal" and row.commitId %}<br><span class="provenance">{{ row.commitId }}</span>{% endif %}</td><td class="number">{{ row.activeLabel }}</td><td class="number">{{ row.runLabel }}</td>{% if view === "internal" %}<td>{{ row.evidenceCount }}</td>{% endif %}</tr>{% else %}<tr><td colspan="5" class="muted">未提供推断的功能归因，因此不主张低可信度归因。</td></tr>{% endfor %}</tbody></table>
@@ -568,6 +566,7 @@ function renderReport(
   featureIntervalTotals: readonly z.output<typeof featureIntervalTotalSchema>[],
   commitEstimates: readonly FeatureCommitEstimate[],
   dailyCommitSummaries: readonly DailyCommitSummary[],
+  dailyCommitEstimates: readonly DailyCommitEstimate[],
   view: "internal" | "customer",
   dateRange: ReportingDateRange | undefined
 ): string {
@@ -587,7 +586,7 @@ function renderReport(
   const commitEstimateTotalHours = commitEstimateTotalMinutes / 60;
   const commitEstimateTotalDays = commitEstimateTotalHours / 8;
   const commitEstimateTotalCost = commitEstimateTotalDays * 1200;
-  const dailyRows = new Map<string, { date: string; activeLabel: string; commitCount?: number; commitSummary?: string; coverageLabel?: string }>();
+  const dailyRows = new Map<string, { date: string; activeLabel: string; commitCount?: number; commitSummary?: string; commitEstimateMinutes?: number; commitEstimateSummary?: string; coverageLabel?: string }>();
   for (const entry of accounting.active.daily) dailyRows.set(entry.date, { date: entry.date, activeLabel: `${entry.minutes} 分钟` });
   for (const entry of dailyCommitSummaries) {
     const existing = dailyRows.get(entry.date);
@@ -596,6 +595,18 @@ function renderReport(
       activeLabel: existing?.activeLabel ?? "—",
       commitCount: entry.commitCount,
       commitSummary: entry.summary
+    });
+  }
+  for (const entry of dailyCommitEstimates) {
+    const existing = dailyRows.get(entry.date);
+    dailyRows.set(entry.date, {
+      date: entry.date,
+      activeLabel: existing?.activeLabel ?? "—",
+      commitCount: existing?.commitCount,
+      commitSummary: existing?.commitSummary,
+      commitEstimateMinutes: entry.estimatedMinutes,
+      commitEstimateSummary: entry.summary,
+      coverageLabel: existing?.coverageLabel
     });
   }
   const renderedCoverage = visibleCoverage.map((entry) => ({
@@ -609,6 +620,8 @@ function renderReport(
       activeLabel: existing?.activeLabel ?? "—",
       commitCount: existing?.commitCount,
       commitSummary: existing?.commitSummary,
+      commitEstimateMinutes: existing?.commitEstimateMinutes,
+      commitEstimateSummary: existing?.commitEstimateSummary,
       coverageLabel: entry.label
     });
   }
@@ -717,7 +730,7 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
   const normalized = normalizeMatchingEvents(events, profile.roots);
   const commitReportData = dateRange
     ? await readProjectCommitReportData({ roots: profile.roots, dateRange })
-    : { estimates: [], dailySummaries: [] };
+    : { estimates: [], dailySummaries: [], dailyEstimates: [] };
 
   return serializeInProcessRefresh(async () => {
     await mkdir(dirname(databasePath), { recursive: true });
@@ -774,6 +787,7 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
         featureIntervalTotals,
         commitReportData.estimates,
         commitReportData.dailySummaries,
+        commitReportData.dailyEstimates,
         view,
         dateRange
       );
