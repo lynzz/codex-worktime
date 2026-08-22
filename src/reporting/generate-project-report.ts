@@ -55,7 +55,7 @@ const eventSchema = z.object({
   toolUseId: z.string().min(1).optional(),
   agentId: z.string().min(1).optional(),
   parentSessionId: z.string().min(1).optional(),
-  source: z.enum(["fixture", "history", "claude-history", "hook"]).default("fixture")
+  source: z.enum(["fixture", "history", "claude-history", "cursor-history", "hook"]).default("fixture")
 });
 
 const coverageEntrySchema = z.object({
@@ -98,6 +98,7 @@ const inputSchema = z.object({
   coverage: z.array(coverageEntrySchema).default([]),
   featureAttributions: z.array(featureAttributionSchema).default([]),
   featureIntervalTotals: z.array(featureIntervalTotalSchema).default([]),
+  sourceNotes: z.array(z.string().trim().min(1).max(240)).default([]),
   view: z.enum(["internal", "customer"]).default("internal"),
   dateRange: dateRangeSchema.optional(),
   databasePath: z.string().min(1),
@@ -110,6 +111,7 @@ export type GenerateProjectReportInput = {
   coverage?: unknown;
   featureAttributions?: unknown;
   featureIntervalTotals?: unknown;
+  sourceNotes?: unknown;
   view?: "internal" | "customer";
   dateRange?: ReportingDateRange;
   databasePath: string;
@@ -138,7 +140,7 @@ type StoredEvent = {
   toolUseHash: string | null;
   agentHash: string | null;
   lineageHash: string | null;
-  source: "fixture" | "history" | "claude-history" | "hook";
+  source: "fixture" | "history" | "claude-history" | "cursor-history" | "hook";
 };
 
 type EventNormalization = {
@@ -569,6 +571,7 @@ function renderReport(
   dailyCommitSummaries: readonly DailyCommitSummary[],
   dailyCommitEstimates: readonly DailyCommitEstimate[],
   sourceCounts: readonly { source: StoredEvent["source"]; eventCount: number }[],
+  sourceNotes: readonly string[],
   view: "internal" | "customer",
   dateRange: ReportingDateRange | undefined
 ): string {
@@ -592,6 +595,7 @@ function renderReport(
     fixture: "测试数据",
     history: "Codex",
     "claude-history": "Claude Code",
+    "cursor-history": "Cursor",
     hook: "Codex Hook"
   };
   const dailyRows = new Map<string, { date: string; activeLabel: string; commitCount?: number; commitSummary?: string; commitEstimateMinutes?: number; commitEstimateSummary?: string; coverageLabel?: string }>();
@@ -701,8 +705,8 @@ function renderReport(
         : "此 Project Profile 没有可用的匹配事件元数据。",
     warnings,
     accounting,
-    sourceSummary: sourceCounts.length
-      ? sourceCounts.map((entry) => `${sourceLabels[entry.source]} ${entry.eventCount} 条`).join(" · ")
+    sourceSummary: sourceCounts.length || sourceNotes.length
+      ? [...sourceCounts.map((entry) => `${sourceLabels[entry.source]} ${entry.eventCount} 条`), ...sourceNotes].join(" · ")
       : "无匹配事件",
     legacyUnscopedWarningCount,
     dateRangeLabel: dateRange ? `${dateRange.from} 至 ${dateRange.to}` : undefined,
@@ -732,7 +736,7 @@ async function writeOfflineReport(htmlPath: string, contents: string): Promise<v
 }
 
 export async function generateProjectReport(input: GenerateProjectReportInput): Promise<ProjectReportResult> {
-  const { profile, events, coverage, featureAttributions, featureIntervalTotals, view, dateRange, databasePath, htmlPath } = inputSchema.parse(input);
+  const { profile, events, coverage, featureAttributions, featureIntervalTotals, sourceNotes, view, dateRange, databasePath, htmlPath } = inputSchema.parse(input);
   if (view === "customer" && !dateRange) {
     throw new Error("Customer reports require an Asia/Shanghai reporting date range");
   }
@@ -808,6 +812,7 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
         commitReportData.dailySummaries,
         commitReportData.dailyEstimates,
         sourceCounts,
+        sourceNotes,
         view,
         dateRange
       );

@@ -56,6 +56,7 @@ describe("generateProjectReport", () => {
       featureIntervalTotals: [
         { featureId: "billing", activeMinutes: 2, runMinutes: 1, evidenceCount: 1 }
       ],
+      sourceNotes: ["Cursor 1 个会话 · 2 个回合（缺少时间戳，未计入工时）"],
       databasePath,
       htmlPath,
       applicationDataDirectory: outputDirectory
@@ -77,6 +78,7 @@ describe("generateProjectReport", () => {
     expect(html).toContain('class="summary-table"');
     expect(html).toContain("已核验数据 · 汇总");
     expect(html).toContain("测试数据 2 条");
+    expect(html).toContain("Cursor 1 个会话 · 2 个回合（缺少时间戳，未计入工时）");
     expect(html).toContain("功能归因与已核验分钟");
     expect(html).toContain("已核验区间、提交节奏与数据覆盖");
     expect(html).toContain("提交节奏推测（非核验）");
