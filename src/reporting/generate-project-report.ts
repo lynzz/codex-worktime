@@ -191,6 +191,9 @@ const reportTemplate = `<!doctype html>
       {% if featureAttributions.length %}
         <h2>Inferred delivery evidence</h2>
         <ul>{% for attribution in featureAttributions %}<li>{{ attribution.featureName }}: {{ attribution.evidence }} ({{ attribution.confidence }} confidence){% if attribution.suggested %} — Low-confidence suggestion{% endif %}{% if view === "internal" %} [{{ attribution.commitId }}]{% endif %}</li>{% endfor %}</ul>
+      {% else %}
+        <h2>Inferred delivery evidence</h2>
+        <p>No inferred Feature attribution was supplied; no low-confidence attribution is claimed.</p>
       {% endif %}
       {% if featureIntervalTotals.length %}
         <h2>Feature-linked verified intervals</h2>

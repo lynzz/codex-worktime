@@ -41,5 +41,6 @@ describe("offline report smoke flow", () => {
     const valid = await readFile(validPath, "utf8");
     expect(valid).toContain("Verified data");
     expect(valid).toContain("5 wall-clock minutes");
+    expect(valid).toContain("No inferred Feature attribution was supplied; no low-confidence attribution is claimed");
   });
 });
