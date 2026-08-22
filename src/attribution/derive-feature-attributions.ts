@@ -2,7 +2,7 @@ export type Confidence = "high" | "medium" | "low";
 export type Evidence = "explicit-ticket" | "planning-reference" | "branch" | "merge-subject" | "commit-subject" | "path" | "semantic";
 
 export type Feature = { id: string; name: string; ticketRefs?: string[]; planningRefs?: string[]; branches?: string[]; keywords?: string[] };
-export type CommitEvidence = { id: string; subject: string; scope?: string; paths?: string[]; ticketRefs?: string[]; planningRefs?: string[]; branch?: string; isMerge?: boolean; authoredAt?: string; committedAt?: string };
+export type CommitEvidence = { id: string; subject: string; scope?: string; paths?: string[]; ticketRefs?: string[]; planningRefs?: string[]; branch?: string; isMerge?: boolean; mergedCommitIds?: string[]; authoredAt?: string; committedAt?: string };
 export type FeatureAttribution = { featureId: string; featureName: string; commitId: string; evidence: Evidence; confidence: Confidence; suggested: boolean };
 
 function includesAny(value: string, candidates: readonly string[] | undefined): boolean {
@@ -23,10 +23,21 @@ function attributionFor(feature: Feature, commit: CommitEvidence): Omit<FeatureA
 export function deriveFeatureAttributions(input: { features: readonly Feature[]; commits: readonly CommitEvidence[] }): FeatureAttribution[] {
   const result: FeatureAttribution[] = [];
   const rank: Record<Evidence, number> = { "explicit-ticket": 7, "planning-reference": 6, branch: 5, "merge-subject": 4, "commit-subject": 3, path: 2, semantic: 1 };
-  for (const commit of input.commits) {
+  const mergesByCommit = new Map<string, CommitEvidence[]>();
+  for (const merge of input.commits.filter((commit) => commit.isMerge)) {
+    for (const commitId of merge.mergedCommitIds ?? []) {
+      const merges = mergesByCommit.get(commitId) ?? [];
+      merges.push(merge);
+      mergesByCommit.set(commitId, merges);
+    }
+  }
+  for (const commit of input.commits.filter((commit) => !commit.isMerge)) {
     const candidates: FeatureAttribution[] = [];
     for (const feature of input.features) {
-      const attribution = attributionFor(feature, commit);
+      const mergeAttribution = mergesByCommit.get(commit.id)?.some((merge) => includesAny(merge.subject, [feature.id, feature.name]))
+        ? { evidence: "merge-subject" as const, confidence: "medium" as const, suggested: false }
+        : undefined;
+      const attribution = attributionFor(feature, commit) ?? mergeAttribution;
       if (attribution) candidates.push({ featureId: feature.id, featureName: feature.name, commitId: commit.id, ...attribution });
     }
     const strongest = Math.max(...candidates.map((candidate) => rank[candidate.evidence]), 0);

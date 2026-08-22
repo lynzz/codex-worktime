@@ -36,4 +36,17 @@ describe("deriveFeatureAttributions", () => {
       { featureId: "billing", featureName: "Billing export", commitId: "semantic", evidence: "semantic", confidence: "low", suggested: true }
     ]);
   });
+
+  it("uses merge subject only as evidence for an explicitly associated non-merge delivery commit", () => {
+    const result = deriveFeatureAttributions({
+      features: [{ id: "billing", name: "Billing" }],
+      commits: [
+        { id: "delivery", subject: "chore: release" },
+        { id: "merge", subject: "Merge billing feature", isMerge: true, mergedCommitIds: ["delivery"] }
+      ]
+    });
+    expect(result).toEqual([
+      { featureId: "billing", featureName: "Billing", commitId: "delivery", evidence: "merge-subject", confidence: "medium", suggested: false }
+    ]);
+  });
 });
