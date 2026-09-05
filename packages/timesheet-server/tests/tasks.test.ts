@@ -1,5 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { api } from "../src/api";
 import { getDb } from "../src/db";
 import { entries, projects } from "../src/schema";
@@ -72,6 +72,57 @@ describe.skipIf(!hasTestDb)("tasks API(集成,Neon test 分支)", () => {
       minutes: 30,
     });
     expect(((await unmatched.json()) as { taskId: string | null }).taskId).toBeNull();
+  });
+
+  it("改名:条目标题快照不回写、taskId 关联保持;重名/空名 400", async () => {
+    const task = (await (await post("/api/tasks", {
+      projectId,
+      title: "登录页联调",
+    })).json()) as { id: string; title: string };
+    const entry = (await (await post("/api/entries", {
+      date: "2026-09-05",
+      projectId,
+      title: "登录页联调",
+      minutes: 60,
+    })).json()) as { id: string; taskId: string | null; title: string };
+
+    const renamed = await api.request(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "登录页联调(二期)" }),
+    });
+    expect(renamed.status).toBe(200);
+    expect(((await renamed.json()) as { title: string }).title).toBe(
+      "登录页联调(二期)",
+    );
+
+    // 条目保留旧快照与关联
+    const [after] = await getDb().select().from(entries).where(eq(entries.id, entry.id));
+    expect(after!.title).toBe("登录页联调");
+    expect(after!.taskId).toBe(task.id);
+
+    // 同项目重名拒绝
+    await post("/api/tasks", { projectId, title: "另一个任务" });
+    const dup = await api.request(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "另一个任务" }),
+    });
+    expect(dup.status).toBe(400);
+
+    // 空名拒绝;未知任务 404
+    const blank = await api.request(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "  " }),
+    });
+    expect(blank.status).toBe(400);
+    const ghost = await api.request("/api/tasks/ghost", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ title: "x" }),
+    });
+    expect(ghost.status).toBe(404);
   });
 
   it("删除任务行:条目保留且 taskId 置空(降级散录)", async () => {

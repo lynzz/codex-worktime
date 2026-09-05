@@ -220,7 +220,17 @@ function TaskRowsSection({
             <span className="text-gray-500">
               {actives.find((p) => p.id === t.projectId)?.name ?? "?"}
             </span>
-            <span className="flex-1">{t.title}</span>
+            <Input
+              aria-label="任务行标题"
+              className="min-w-40 flex-1"
+              defaultValue={t.title}
+              onBlur={(e) => {
+                const title = e.target.value.trim();
+                if (title && title !== t.title) {
+                  void run(() => api.patchTask(t.id, { title }));
+                }
+              }}
+            />
             <Button
               size="sm"
               variant="ghost"

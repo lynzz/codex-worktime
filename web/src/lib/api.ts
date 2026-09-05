@@ -1,4 +1,4 @@
-import type { Project, ProjectCreate, ProjectPatch, Entry, EntryCreate, EntryPatch, Task, TaskCreate } from "@codex-worktime/timesheet-core";
+import type { Project, ProjectCreate, ProjectPatch, Entry, EntryCreate, EntryPatch, Task, TaskCreate, TaskPatch } from "@codex-worktime/timesheet-core";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -47,6 +47,11 @@ export const api = {
     request<Task>("/api/tasks", {
       method: "POST",
       body: JSON.stringify(input),
+    }),
+  patchTask: (id: string, patch: TaskPatch) =>
+    request<Task>(`/api/tasks/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
     }),
   deleteTask: (id: string) =>
     request<{ ok: boolean }>(`/api/tasks/${id}`, { method: "DELETE" }),

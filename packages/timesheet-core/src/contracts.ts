@@ -80,3 +80,8 @@ export const taskCreateSchema = z.object({
   title: z.string().trim().min(1, "请填写任务标题").max(200, "任务标题过长"),
 });
 export type TaskCreate = z.infer<typeof taskCreateSchema>;
+
+export const taskPatchSchema = z.object({
+  title: z.string().trim().min(1, "请填写任务标题").max(200, "任务标题过长"),
+});
+export type TaskPatch = z.infer<typeof taskPatchSchema>;
