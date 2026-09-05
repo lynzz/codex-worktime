@@ -2,3 +2,4 @@
 export * from "./contracts";
 export * from "./duration";
 export * from "./dates";
+export * from "./aggregation";

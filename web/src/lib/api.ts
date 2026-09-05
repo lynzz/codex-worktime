@@ -50,4 +50,16 @@ export const api = {
     }),
   deleteTask: (id: string) =>
     request<{ ok: boolean }>(`/api/tasks/${id}`, { method: "DELETE" }),
+
+  replaceCell: (input: {
+    date: string;
+    projectId: string;
+    taskId: string | null;
+    title: string | null;
+    minutes: number | null;
+  }) =>
+    request<{ ok: boolean }>("/api/entries/replace-cell", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
 };

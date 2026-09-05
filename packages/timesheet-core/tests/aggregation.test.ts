@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildWeekRows } from "../src/aggregation";
+import { buildWeekRows, cellReplaceMatches, entriesForRow } from "../src/aggregation";
 import type { Entry, Project, Task } from "../src/contracts";
 
 const projects: Project[] = [
@@ -53,6 +53,32 @@ describe("buildWeekRows(任务行 + 散录聚合)", () => {
     ];
     const rows = buildWeekRows(projects, [], entries);
     expect(rows).toHaveLength(2);
+  });
+
+  it("行×日分组:任务行按 taskId,散举行按 项目+标题 且 taskId 为空", () => {
+    const taskRow = { taskId: "t1", projectId: "p1", title: "联调", adhoc: false };
+    const adhocRow = { taskId: null, projectId: "p1", title: "支援", adhoc: true };
+    const list: Entry[] = [
+      { ...e("a", "2026-09-01", "p1", "联调"), taskId: "t1" },
+      { ...e("b", "2026-09-01", "p1", "联调"), taskId: "t1" },
+      e("c", "2026-09-02", "p1", "联调"),
+      e("d", "2026-09-01", "p1", "支援"),
+    ];
+    expect(entriesForRow(taskRow, "2026-09-01", list, new Set(["t1"]))).toHaveLength(2);
+    expect(entriesForRow(taskRow, "2026-09-02", list, new Set(["t1"]))).toHaveLength(0);
+    expect(entriesForRow(adhocRow, "2026-09-01", list, new Set())).toHaveLength(1);
+  });
+
+  it("整格替换谓词:taskId 行与散举行各自匹配同格条目", () => {
+    const list: Entry[] = [
+      { ...e("a", "2026-09-01", "p1", "联调"), taskId: "t1" },
+      e("b", "2026-09-01", "p1", "支援"),
+      e("c", "2026-09-02", "p1", "支援"),
+    ];
+    const cell = { date: "2026-09-01", projectId: "p1", taskId: "t1", title: "联调" };
+    expect(list.filter((x) => cellReplaceMatches(cell, x)).map((x) => x.id)).toEqual(["a"]);
+    const adhocCell = { date: "2026-09-01", projectId: "p1", taskId: null, title: "支援" };
+    expect(list.filter((x) => cellReplaceMatches(adhocCell, x)).map((x) => x.id)).toEqual(["b"]);
   });
 });
 

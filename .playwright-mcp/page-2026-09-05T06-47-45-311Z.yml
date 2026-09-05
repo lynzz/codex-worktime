@@ -1,0 +1,46 @@
+- main [ref=f6e2]:
+  - generic [ref=f6e3]:
+    - generic [ref=f6e4]:
+      - heading "工时速记" [level=1] [ref=f6e5]
+      - generic [ref=f6e6]: 手工登记外包项目投入
+    - generic [ref=f6e7]:
+      - generic [ref=f6e8]: 总工时 0h
+      - button "项目 ⚙" [ref=f6e10] [cursor=pointer]
+  - generic [ref=f6e11]: EQA
+  - navigation [ref=f6e14]:
+    - button "周网格" [ref=f6e15] [cursor=pointer]
+    - button "日清单" [ref=f6e16] [cursor=pointer]
+    - button "月日历" [ref=f6e17] [cursor=pointer]
+  - generic [ref=f6e18]:
+    - generic [ref=f6e19]:
+      - button "← 上一周" [ref=f6e20] [cursor=pointer]
+      - generic [ref=f6e21]: 2026-08-31 ~ 2026-09-06
+      - button "下一周 →" [ref=f6e22] [cursor=pointer]
+      - generic [ref=f6e23]: 格子敲小时数(1.5 / 1:30 / 90m),回车或 Tab 跳格,清空即删除
+    - table [ref=f6e25]:
+      - rowgroup [ref=f6e26]:
+        - row [ref=f6e27]:
+          - columnheader "项目" [ref=f6e28]
+          - columnheader "任务" [ref=f6e29]
+          - columnheader "周一 08-31" [ref=f6e30] [cursor=pointer]: 周一08-31
+          - columnheader "周二 09-01" [ref=f6e31] [cursor=pointer]: 周二09-01
+          - columnheader "周三 09-02" [ref=f6e32] [cursor=pointer]: 周三09-02
+          - columnheader "周四 09-03" [ref=f6e33] [cursor=pointer]: 周四09-03
+          - columnheader "周五 09-04" [ref=f6e34] [cursor=pointer]: 周五09-04
+          - columnheader "周六 09-05 ·今天" [ref=f6e35] [cursor=pointer]: 周六09-05 ·今天
+          - columnheader "周日 09-06" [ref=f6e36] [cursor=pointer]: 周日09-06
+          - columnheader "周合计" [ref=f6e37]
+      - rowgroup [ref=f6e38]:
+        - row [ref=f6e39]:
+          - cell "还没有任务行,在「项目 ⚙」里添加;未挂任务行的记录会以散录行出现" [ref=f6e40]
+      - rowgroup [ref=f6e41]:
+        - row [ref=f6e42]:
+          - columnheader "日合计" [ref=f6e43]
+          - cell [ref=f6e44]
+          - cell [ref=f6e45]
+          - cell [ref=f6e46]
+          - cell [ref=f6e47]
+          - cell [ref=f6e48]
+          - cell [ref=f6e49]
+          - cell [ref=f6e50]
+          - cell "0h" [ref=f6e51]

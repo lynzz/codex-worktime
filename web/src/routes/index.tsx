@@ -14,6 +14,7 @@ import { api as honoApi } from "@codex-worktime/timesheet-server";
 import { projectColor } from "~/lib/colors";
 import { ProjectsPanel } from "~/components/ProjectsPanel";
 import { DayList } from "~/components/DayList";
+import { WeekGrid } from "~/components/WeekGrid";
 
 const searchSchema = z.object({
   variant: z.enum(["week", "day", "month"]).catch("day"),
@@ -132,9 +133,20 @@ function AppShell() {
               onChanged={refresh}
             />
           )}
-          {(variant === "week" || variant === "month") && (
+          {variant === "week" && (
+            <WeekGrid
+              date={date}
+              projects={projects}
+              tasks={tasks}
+              entries={entries}
+              onDateChange={(d) => setSearch({ date: d })}
+              onGotoDay={(d) => setSearch({ variant: "day", date: d })}
+              onChanged={refresh}
+            />
+          )}
+          {variant === "month" && (
             <section className="mt-6 rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-400">
-              {variant === "week" ? "周网格" : "月日历"}建设中 —— 后续票点亮
+              月历建设中 —— T6 点亮
             </section>
           )}
         </>

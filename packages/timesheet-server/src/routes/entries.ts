@@ -1,8 +1,10 @@
 import { Hono } from "hono";
-import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { z } from "zod";
+import { and, asc, eq, gte, isNull, lte } from "drizzle-orm";
 import { getDb } from "../db";
 import { entries, projects, tasks } from "../schema";
 import {
+  cellReplaceMatches,
   entryCreateSchema,
   entryPatchSchema,
   type Entry,
@@ -66,6 +68,92 @@ entriesRouter.post("/", async (c) => {
   const row = rows[0];
   if (!row) return c.json({ error: "创建失败" }, 500);
   return c.json(row satisfies Entry, 201);
+});
+
+const replaceCellSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  projectId: z.string().min(1),
+  taskId: z.string().nullable().optional(),
+  title: z.string().trim().min(1).max(200).nullable().optional(),
+  minutes: z
+    .number()
+    .int()
+    .min(1, "时长必须大于 0")
+    .max(24 * 60)
+    .nullable()
+    .optional(),
+});
+
+// 周网格整格替换(原型验证语义):以「taskId 或 项目+标题」为键,
+// 事务内删除该格全部条目后写入单条;minutes 缺省/为空 = 仅清格。
+entriesRouter.post("/replace-cell", async (c) => {
+  const parsed = replaceCellSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) {
+    return c.json({ error: parsed.error.issues[0]?.message ?? "参数无效" }, 400);
+  }
+  const input = parsed.data;
+  const date = input.date!;
+  const projectId = input.projectId;
+  const taskId = input.taskId ?? null;
+  const minutes = input.minutes ?? null;
+
+  const db = getDb();
+  const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
+  if (!project) return c.json({ error: "项目不存在" }, 404);
+
+  let title: string | null = null;
+  if (taskId) {
+    const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+    if (!task || task.projectId !== projectId) {
+      return c.json({ error: "任务行不存在" }, 404);
+    }
+    title = task.title; // 标题快照
+  } else {
+    title = input.title ?? null;
+    if (!title) return c.json({ error: "散录格需要 title" }, 400);
+  }
+  if (minutes === null && taskId === null && !title) {
+    return c.json({ error: "缺少替换内容" }, 400);
+  }
+
+  const dayEntries = await db
+    .select()
+    .from(entries)
+    .where(
+      taskId
+        ? and(eq(entries.date, date), eq(entries.taskId, taskId))
+        : and(
+            eq(entries.date, date),
+            isNull(entries.taskId),
+            eq(entries.projectId, projectId),
+            eq(entries.title, title),
+          ),
+    );
+  const ids = dayEntries.filter((x) => cellReplaceMatches({ date, projectId, taskId, title }, x)).map((x) => x.id);
+
+  const result = await db.transaction(async (tx) => {
+    for (const id of ids) {
+      await tx.delete(entries).where(eq(entries.id, id));
+    }
+    if (minutes !== null) {
+      const rows = await tx
+        .insert(entries)
+        .values({
+          id: crypto.randomUUID(),
+          date,
+          projectId,
+          title: title!,
+          minutes,
+          taskId,
+          category: null,
+          note: null,
+        })
+        .returning();
+      return rows[0] ?? null;
+    }
+    return null;
+  });
+  return c.json({ ok: true, entry: result satisfies Entry | null });
 });
 
 entriesRouter.patch("/:id", async (c) => {
