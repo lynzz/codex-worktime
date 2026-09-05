@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Button, Card, Chip, Input } from "@heroui/react";
+import { Button, Chip, Input, Modal } from "@heroui/react";
 import {
   dayOfWeekCN,
   formatHours,
@@ -44,35 +44,13 @@ export function MonthCalendar({
 }) {
   const today = todayKey();
   const [selected, setSelected] = useState(date);
-  const [projectId, setProjectId] = useState(
-    projects.find((p) => !p.archived)?.id ?? "",
-  );
-  const [title, setTitle] = useState("");
-  const [duration, setDuration] = useState("");
-  const [error, setError] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
 
   const grid = useMemo(() => monthDays(date), [date]);
   const active = projects.filter((p) => !p.archived);
   const monthTotal = entries
     .filter((e) => e.date >= monthStart(date) && e.date < nextMonthFirst(date))
     .reduce((s, e) => s + e.minutes, 0);
-
-  async function quickAdd() {
-    const minutes = parseDurationInput(duration);
-    if (!title.trim()) return setError("请填写任务标题");
-    if (minutes === null || Number.isNaN(minutes) || minutes <= 0)
-      return setError("请填写时长(支持 1.5 / 1:30 / 90m)");
-    setError("");
-    try {
-      await api.createEntry({ date: selected, projectId, title, minutes });
-      setTitle("");
-      setDuration("");
-    } catch (e) {
-      setError((e as Error).message);
-      return;
-    }
-    onChanged();
-  }
 
   return (
     <div className="mt-6 flex flex-col gap-3">
@@ -129,7 +107,10 @@ export function MonthCalendar({
             <button
               key={day}
               type="button"
-              onClick={() => setSelected(day)}
+              onClick={() => {
+                setSelected(day);
+                setModalOpen(true);
+              }}
               className={`min-h-20 rounded-lg border p-1.5 text-left align-top text-xs ${
                 day === selected
                   ? "border-blue-500 ring-2 ring-blue-100"
@@ -163,60 +144,151 @@ export function MonthCalendar({
         })}
       </div>
 
-      <Card>
-        <Card.Content className="flex flex-wrap items-end gap-2 p-3">
-        <span className="text-sm font-semibold">
-          {selected} {dayOfWeekCN(selected)} · 已登记{" "}
-          {formatHours(
-            entries
-              .filter((e) => e.date === selected)
-              .reduce((s, e) => s + e.minutes, 0),
-          )}
-        </span>
-        <HeroSelect
-          ariaLabel="补录项目"
-          className="w-40"
-          items={active.map((p) => ({ id: p.id, name: p.name }))}
-          selectedKey={projectId}
-          onSelectionChange={setProjectId}
-        />
-        <Input
-          placeholder="任务标题"
-          className="w-44"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              void quickAdd();
-            }
-          }}
-        />
-        <Input
-          placeholder="时长:1.5 / 1:30 / 90m"
-          className="w-36"
-          value={duration}
-          onChange={(e) => setDuration(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              void quickAdd();
-            }
-          }}
-        />
-        <Button size="sm" variant="primary" onPress={() => void quickAdd()}>
-          补录
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onPress={() => onGotoDay(selected)}
-        >
-          日清单 →
-        </Button>
-        {error && <span className="text-sm text-red-600">{error}</span>}
-        </Card.Content>
-      </Card>
+      <DayEntryModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        date={selected}
+        projects={projects}
+        entries={entries}
+        onChanged={onChanged}
+        onGotoDay={(d) => {
+          setModalOpen(false);
+          onGotoDay(d);
+        }}
+      />
     </div>
+  );
+}
+
+function DayEntryModal({
+  isOpen,
+  onClose,
+  date,
+  projects,
+  entries,
+  onChanged,
+  onGotoDay,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  date: string;
+  projects: Project[];
+  entries: Entry[];
+  onChanged: () => void;
+  onGotoDay: (date: string) => void;
+}) {
+  const active = projects.filter((p) => !p.archived);
+  const [projectId, setProjectId] = useState(active[0]?.id ?? "");
+  const [title, setTitle] = useState("");
+  const [duration, setDuration] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const dayEntries = entries.filter((e) => e.date === date);
+  const dayTotal = dayEntries.reduce((s, e) => s + e.minutes, 0);
+
+  async function add() {
+    const minutes = parseDurationInput(duration);
+    if (!title.trim()) return setError("请填写任务标题");
+    if (minutes === null || Number.isNaN(minutes) || minutes <= 0)
+      return setError("请填写时长(支持 1.5 / 1:30 / 90m)");
+    setBusy(true);
+    setError("");
+    try {
+      await api.createEntry({ date, projectId, title, minutes });
+      setTitle("");
+      setDuration("");
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+      return;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <Modal.Backdrop>
+        <Modal.Container>
+          <Modal.Dialog>
+            <Modal.Header>
+              {date} {dayOfWeekCN(date)} · 已登记 {formatHours(dayTotal)}
+            </Modal.Header>
+            <Modal.Body>
+              <div className="flex flex-wrap items-end gap-2">
+                <HeroSelect
+                  ariaLabel="补录项目"
+                  className="w-36"
+                  items={active.map((p) => ({ id: p.id, name: p.name }))}
+                  selectedKey={projectId}
+                  onSelectionChange={setProjectId}
+                />
+                <Input
+                  placeholder="任务标题"
+                  className="w-44"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void add();
+                    }
+                  }}
+                />
+                <Input
+                  placeholder="时长:1.5 / 1:30 / 90m"
+                  className="w-36"
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void add();
+                    }
+                  }}
+                />
+                <Button size="sm" variant="primary" isDisabled={busy} onPress={() => void add()}>
+                  添加
+                </Button>
+              </div>
+              {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+
+              {dayEntries.length > 0 && (
+                <div className="mt-3 flex flex-col gap-1">
+                  {dayEntries.map((e) => (
+                    <div key={e.id} className="flex items-center gap-2 text-sm">
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-full"
+                        style={{ background: projectColor(e.projectId) }}
+                      />
+                      <span className="flex-1 truncate">{e.title}</span>
+                      <span className="font-semibold">{formatHours(e.minutes)}</span>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onPress={() => {
+                          void api.deleteEntry(e.id).then(onChanged);
+                        }}
+                      >
+                        删除
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Modal.Body>
+            <Modal.Footer>
+              <Button size="sm" variant="ghost" onPress={() => onGotoDay(date)}>
+                日清单 →
+              </Button>
+              <Button size="sm" variant="ghost" onPress={onClose}>
+                关闭
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
+    </Modal>
   );
 }

@@ -5,9 +5,42 @@ import { projectsRouter } from "./routes/projects.js";
 import { entriesRouter } from "./routes/entries.js";
 import { tasksRouter } from "./routes/tasks.js";
 import { aggregateTaskRows, buildTaskListWorkbook } from "./export-xlsx.js";
+import { importPrototypeTimesheet } from "./import-prototype.js";
+import { importTaskListWorkbook } from "./import-xlsx.js";
 import { entries as entriesTable, projects as projectsTable } from "./schema.js";
 
 export const api = new Hono();
+
+// Excel 模板导入:?date=YYYY-MM-DD 指定条目目标日期(缺省今天)
+api.post("/api/import/xlsx", async (c) => {
+  const date = c.req.query("date");
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return c.json({ error: "date 应为 YYYY-MM-DD" }, 400);
+  }
+  const targetDate = date ?? new Date().toISOString().slice(0, 10);
+  try {
+    const body = await c.req.arrayBuffer();
+    if (body.byteLength === 0) return c.json({ error: "缺少文件内容" }, 400);
+    const result = await importTaskListWorkbook(body, targetDate);
+    return c.json(result, 201);
+  } catch (error) {
+    return c.json({ error: (error as Error).message }, 400);
+  }
+});
+
+// 幂等导入(原型 JSON / 本应用导出的 JSON,同一形状):重复导入按 id 跳过
+api.post("/api/import", async (c) => {
+  try {
+    const result = await importPrototypeTimesheet(await c.req.json().catch(() => null));
+    return c.json(result, 201);
+  } catch (error) {
+    const zod = error as { issues?: { message?: string }[] };
+    return c.json(
+      { error: zod.issues?.[0]?.message ?? "导入文件结构不符" },
+      400,
+    );
+  }
+});
 
 // 页面已用内联 SVG 图标;此路由仅为消掉浏览器对 /favicon.ico 的 404 探测
 api.get("/favicon.ico", (c) => c.body(null, 204));

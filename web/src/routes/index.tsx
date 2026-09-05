@@ -24,6 +24,7 @@ import { DayList } from "~/components/DayList";
 import { WeekGrid } from "~/components/WeekGrid";
 import { MonthCalendar } from "~/components/MonthCalendar";
 import { QuickEntry } from "~/components/QuickEntry";
+import { ImportDialog } from "~/components/ImportDialog";
 import { ExportDialog } from "~/components/ExportDialog";
 
 const searchSchema = z.object({
@@ -70,6 +71,7 @@ function AppShell() {
   const router = useRouter();
   const [panelOpen, setPanelOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const active = projects.filter((p) => !p.archived);
   const refresh = () => void router.invalidate();
 
@@ -113,6 +115,9 @@ function AppShell() {
           </Button>
           <Button size="sm" variant="ghost" onPress={() => void exportJson()}>
             导出 JSON
+          </Button>
+          <Button size="sm" variant="ghost" onPress={() => setImportOpen(true)}>
+            导入
           </Button>
           <Button size="sm" variant="ghost" onPress={() => setPanelOpen(true)}>
             项目 ⚙
@@ -215,6 +220,7 @@ function AppShell() {
       )}
 
       <ExportDialog isOpen={exportOpen} onClose={() => setExportOpen(false)} />
+      <ImportDialog isOpen={importOpen} onClose={() => setImportOpen(false)} onChanged={refresh} />
 
       <ProjectsPanel
         projects={projects}
