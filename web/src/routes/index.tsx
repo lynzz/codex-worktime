@@ -159,9 +159,18 @@ function AppShell() {
           >
             <Tabs.ListContainer>
               <Tabs.List>
-                <Tabs.Tab id="week">周网格</Tabs.Tab>
-                <Tabs.Tab id="day">日清单</Tabs.Tab>
-                <Tabs.Tab id="month">月日历</Tabs.Tab>
+                <Tabs.Tab id="week">
+                  周网格
+                  <Tabs.Indicator />
+                </Tabs.Tab>
+                <Tabs.Tab id="day">
+                  日清单
+                  <Tabs.Indicator />
+                </Tabs.Tab>
+                <Tabs.Tab id="month">
+                  月日历
+                  <Tabs.Indicator />
+                </Tabs.Tab>
               </Tabs.List>
             </Tabs.ListContainer>
           </Tabs>

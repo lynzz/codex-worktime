@@ -9,6 +9,9 @@ import { entries as entriesTable, projects as projectsTable } from "./schema.js"
 
 export const api = new Hono();
 
+// 页面已用内联 SVG 图标;此路由仅为消掉浏览器对 /favicon.ico 的 404 探测
+api.get("/favicon.ico", (c) => c.body(null, 204));
+
 api.route("/api/projects", projectsRouter);
 api.route("/api/entries", entriesRouter);
 api.route("/api/tasks", tasksRouter);
