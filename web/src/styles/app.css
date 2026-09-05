@@ -1,2 +1,7 @@
 @import "tailwindcss";
 @import "@heroui/styles";
+
+/* 与 heroui.com 官方文档一致:zinc-100 页面底色 + 白色内容卡片 */
+body {
+  background-color: hsl(240 5% 96%);
+}

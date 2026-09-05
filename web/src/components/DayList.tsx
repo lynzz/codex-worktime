@@ -182,7 +182,7 @@ export function DayList({
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <table className="w-full text-sm">
+      <table className="w-full rounded-xl bg-white text-sm">
         <thead>
           <tr className="border-b border-gray-200 text-left text-xs text-gray-400">
             <th className="py-1.5 pr-2">项目</th>

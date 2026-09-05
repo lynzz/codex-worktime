@@ -245,7 +245,7 @@ function SummaryCards({
   const maxMinutes = Math.max(60, ...perProject.map((x) => x.minutes));
 
   const card = (label: string, value: string) => (
-    <div className="flex-1 rounded-xl border border-gray-200 px-4 py-2">
+    <div className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2">
       <div className="text-xs text-gray-400">{label}</div>
       <div className="text-xl font-bold">{value}</div>
     </div>
@@ -260,7 +260,7 @@ function SummaryCards({
         {card("累计", formatHours(totalMinutes))}
       </div>
       {perProject.length > 0 && (
-        <div className="mt-2 flex flex-col gap-1.5 rounded-xl border border-gray-200 px-4 py-2.5">
+        <div className="mt-2 flex flex-col gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2.5">
           {perProject.map(({ p, minutes }) => (
             <div key={p.id} className="flex items-center gap-3 text-sm">
               <span className="flex w-40 items-center gap-1.5">

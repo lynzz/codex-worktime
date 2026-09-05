@@ -109,7 +109,7 @@ export function WeekGrid({
         </span>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-xl bg-white">
         <table className="min-w-[840px] border-collapse text-sm">
           <thead>
             <tr>
