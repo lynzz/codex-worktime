@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { Button, Chip } from "@heroui/react";
+import { Button, Card, Chip, Tabs } from "@heroui/react";
 import { z } from "zod";
 import {
   addDays,
@@ -128,26 +128,27 @@ function AppShell() {
       </header>
 
       {active.length === 0 ? (
-        <section className="mt-10 rounded-xl border border-dashed border-gray-300 p-10 text-center">
-          <p className="text-base font-semibold">先在「项目 ⚙」里添加一个外包项目</p>
-          <p className="mt-1 text-sm text-gray-400">
-            项目只用于分组,不与任何 AI 时长数据关联
-          </p>
-        </section>
+        <Card className="mt-10">
+          <Card.Content className="p-10 text-center">
+            <p className="text-base font-semibold">先在「项目 ⚙」里添加一个外包项目</p>
+            <p className="mt-1 text-sm text-gray-400">
+              项目只用于分组,不与任何 AI 时长数据关联
+            </p>
+          </Card.Content>
+        </Card>
       ) : (
         <>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             {active.map((p) => (
-              <span
-                key={p.id}
-                className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-3 py-0.5 text-sm font-medium"
-              >
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ background: projectColor(p.id) }}
-                />
-                {p.name}
-              </span>
+              <Chip key={p.id} size="sm" variant="soft">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ background: projectColor(p.id) }}
+                  />
+                  {p.name}
+                </span>
+              </Chip>
             ))}
           </div>
           <SummaryCards
@@ -155,18 +156,22 @@ function AppShell() {
             projects={active}
             totalMinutes={totalMinutes}
           />
-          <nav className="mt-4 flex gap-2">
-            {(["week", "day", "month"] as const).map((v) => (
-              <Button
-                key={v}
-                size="sm"
-                variant={variant === v ? "primary" : "ghost"}
-                onPress={() => setSearch({ variant: v })}
-              >
-                {v === "week" ? "周网格" : v === "day" ? "日清单" : "月日历"}
-              </Button>
-            ))}
-          </nav>
+          <Tabs
+            aria-label="视图切换"
+            className="mt-4"
+            selectedKey={variant}
+            onSelectionChange={(key) =>
+              key && setSearch({ variant: key as "week" | "day" | "month" })
+            }
+          >
+            <Tabs.ListContainer>
+              <Tabs.List>
+                <Tabs.Tab id="week">周网格</Tabs.Tab>
+                <Tabs.Tab id="day">日清单</Tabs.Tab>
+                <Tabs.Tab id="month">月日历</Tabs.Tab>
+              </Tabs.List>
+            </Tabs.ListContainer>
+          </Tabs>
 
           {variant === "day" && (
             <DayList
@@ -245,10 +250,10 @@ function SummaryCards({
   const maxMinutes = Math.max(60, ...perProject.map((x) => x.minutes));
 
   const card = (label: string, value: string) => (
-    <div className="flex-1 rounded-xl border border-gray-200 bg-white px-4 py-2">
-      <div className="text-xs text-gray-400">{label}</div>
-      <div className="text-xl font-bold">{value}</div>
-    </div>
+    <Card className="flex-1">
+      <Card.Header className="px-4 pt-3 pb-0 text-xs text-gray-400">{label}</Card.Header>
+      <Card.Content className="px-4 pb-3 text-xl font-bold">{value}</Card.Content>
+    </Card>
   );
 
   return (
@@ -260,16 +265,17 @@ function SummaryCards({
         {card("累计", formatHours(totalMinutes))}
       </div>
       {perProject.length > 0 && (
-        <div className="mt-2 flex flex-col gap-1.5 rounded-xl border border-gray-200 bg-white px-4 py-2.5">
-          {perProject.map(({ p, minutes }) => (
-            <div key={p.id} className="flex items-center gap-3 text-sm">
-              <span className="flex w-40 items-center gap-1.5">
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ background: projectColor(p.id) }}
-                />
-                {p.name}
-              </span>
+        <Card className="mt-2">
+          <Card.Content className="flex flex-col gap-1.5 px-4 py-2.5">
+            {perProject.map(({ p, minutes }) => (
+              <div key={p.id} className="flex items-center gap-3 text-sm">
+                <span className="flex w-40 items-center gap-1.5">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ background: projectColor(p.id) }}
+                  />
+                  {p.name}
+                </span>
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
                 <div
                   className="h-full rounded-full"
@@ -284,7 +290,8 @@ function SummaryCards({
               </span>
             </div>
           ))}
-        </div>
+          </Card.Content>
+        </Card>
       )}
     </div>
   );

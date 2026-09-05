@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Button, Input } from "@heroui/react";
+import { Button, Card, Chip, Input } from "@heroui/react";
 import {
   dayOfWeekCN,
   formatHours,
@@ -14,9 +14,7 @@ import {
 } from "@codex-worktime/timesheet-core";
 import { api } from "~/lib/api";
 import { projectColor } from "~/lib/colors";
-
-const selectCls =
-  "rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900";
+import { HeroSelect } from "~/components/HeroSelect";
 
 function monthLabel(anchor: string): string {
   const [y, m] = anchor.split("-").map(Number);
@@ -91,7 +89,7 @@ export function MonthCalendar({
             本月
           </Button>
         )}
-        <span className="ml-auto text-sm text-gray-500">
+        <span className="ml-auto flex flex-wrap items-center gap-1.5 text-sm text-gray-500">
           本月合计 <b className="text-gray-900">{formatHours(monthTotal)}</b>
           {active.map((p) => {
             const pm = entries
@@ -103,13 +101,15 @@ export function MonthCalendar({
               )
               .reduce((s, e) => s + e.minutes, 0);
             return (
-              <span key={p.id} className="ml-3">
-                <span
-                  className="mr-1 inline-block h-2 w-2 rounded-full"
-                  style={{ background: projectColor(p.id) }}
-                />
-                {p.name} {formatHours(pm)}
-              </span>
+              <Chip key={p.id} size="sm" variant="soft">
+                <span className="flex items-center gap-1">
+                  <span
+                    className="inline-block h-2 w-2 rounded-full"
+                    style={{ background: projectColor(p.id) }}
+                  />
+                  {p.name} {formatHours(pm)}
+                </span>
+              </Chip>
             );
           })}
         </span>
@@ -163,7 +163,8 @@ export function MonthCalendar({
         })}
       </div>
 
-      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-gray-200 p-3">
+      <Card>
+        <Card.Content className="flex flex-wrap items-end gap-2 p-3">
         <span className="text-sm font-semibold">
           {selected} {dayOfWeekCN(selected)} · 已登记{" "}
           {formatHours(
@@ -172,18 +173,13 @@ export function MonthCalendar({
               .reduce((s, e) => s + e.minutes, 0),
           )}
         </span>
-        <select
-          className={selectCls}
-          value={projectId}
-          onChange={(e) => setProjectId(e.target.value)}
-          aria-label="补录项目"
-        >
-          {active.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <HeroSelect
+          ariaLabel="补录项目"
+          className="w-40"
+          items={active.map((p) => ({ id: p.id, name: p.name }))}
+          selectedKey={projectId}
+          onSelectionChange={setProjectId}
+        />
         <Input
           placeholder="任务标题"
           className="w-44"
@@ -219,7 +215,8 @@ export function MonthCalendar({
           日清单 →
         </Button>
         {error && <span className="text-sm text-red-600">{error}</span>}
-      </div>
+        </Card.Content>
+      </Card>
     </div>
   );
 }

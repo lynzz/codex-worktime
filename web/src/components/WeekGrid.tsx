@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { Button } from "@heroui/react";
+import { Button, Tooltip } from "@heroui/react";
 import {
   addDays,
   buildWeekRows,
@@ -199,9 +199,22 @@ export function WeekGrid({
                           }}
                         />
                         {cellEntries.length > 1 && (
-                          <span className="ml-0.5 align-super text-[10px] text-gray-400">
-                            ×{cellEntries.length}
-                          </span>
+                          <Tooltip>
+                            <Tooltip.Trigger>
+                              <button
+                                type="button"
+                                tabIndex={-1}
+                                className="ml-0.5 align-super text-[10px] text-gray-400"
+                              >
+                                ×{cellEntries.length}
+                              </button>
+                            </Tooltip.Trigger>
+                            <Tooltip.Content>
+                              <span className="whitespace-pre-wrap text-xs">
+                                {cellEntries.map(describeEntry).join("\n")}
+                              </span>
+                            </Tooltip.Content>
+                          </Tooltip>
                         )}
                       </td>
                     );

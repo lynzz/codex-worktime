@@ -13,6 +13,14 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "工时速记" },
+      {
+        rel: "icon",
+        href:
+          "data:image/svg+xml," +
+          encodeURIComponent(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⏱️</text></svg>',
+          ),
+      },
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),

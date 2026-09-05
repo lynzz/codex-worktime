@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Button, Input } from "@heroui/react";
+import { Button, Chip, Input } from "@heroui/react";
 import {
   CATEGORIES,
   addDays,
@@ -13,9 +13,7 @@ import {
 } from "@codex-worktime/timesheet-core";
 import { api } from "~/lib/api";
 import { projectColor } from "~/lib/colors";
-
-const selectCls =
-  "rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm text-gray-900";
+import { HeroSelect } from "~/components/HeroSelect";
 
 export function DayList({
   date,
@@ -94,9 +92,10 @@ export function DayList({
         <Button size="sm" variant="ghost" onPress={() => onDateChange(addDays(date, -1))}>
           ← 前一天
         </Button>
-        <input
+        <Input
           type="date"
-          className={selectCls}
+          aria-label="日期"
+          className="w-40"
           value={date}
           onChange={(e) => e.target.value && onDateChange(e.target.value)}
         />
@@ -114,18 +113,13 @@ export function DayList({
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
-        <select
-          className={selectCls}
-          value={projectId}
-          onChange={(e) => setProjectId(e.target.value)}
-          aria-label="项目"
-        >
-          {active.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <HeroSelect
+          ariaLabel="项目"
+          className="w-40"
+          items={active.map((p) => ({ id: p.id, name: p.name }))}
+          selectedKey={projectId}
+          onSelectionChange={setProjectId}
+        />
         <Input
           placeholder="任务标题,如:登录页联调"
           className="w-52"
@@ -160,16 +154,13 @@ export function DayList({
             }
           }}
         />
-        <select
-          className={selectCls}
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          aria-label="类别"
-        >
-          {CATEGORIES.map((c) => (
-            <option key={c}>{c}</option>
-          ))}
-        </select>
+        <HeroSelect
+          ariaLabel="类别"
+          className="w-28"
+          items={CATEGORIES.map((c) => ({ id: c, name: c }))}
+          selectedKey={category}
+          onSelectionChange={setCategory}
+        />
         <Input
           placeholder="备注(可选)"
           className="w-40"
@@ -182,7 +173,10 @@ export function DayList({
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <table className="w-full rounded-xl bg-white text-sm">
+      <table
+        aria-label="当日条目"
+        className="w-full rounded-xl bg-white text-sm"
+      >
         <thead>
           <tr className="border-b border-gray-200 text-left text-xs text-gray-400">
             <th className="py-1.5 pr-2">项目</th>
@@ -219,15 +213,15 @@ export function DayList({
               <td className="py-1.5 pr-2 font-semibold">{formatHours(e.minutes)}</td>
               <td className="py-1.5 pr-2">
                 {e.category ? (
-                  <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500">
+                  <Chip size="sm" variant="soft">
                     {e.category}
-                  </span>
+                  </Chip>
                 ) : (
                   "—"
                 )}
               </td>
-              <td className="max-w-40 truncate py-1.5 pr-2 text-gray-500">
-                {e.note ?? ""}
+              <td className="py-1.5 pr-2">
+                <span className="block max-w-40 truncate text-gray-500">{e.note ?? ""}</span>
               </td>
               <td className="py-1.5 text-right">
                 <Button
