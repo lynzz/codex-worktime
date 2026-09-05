@@ -18,7 +18,7 @@ const HOST = "127.0.0.1";
 const MAX_BODY_BYTES = 5 * 1024 * 1024;
 
 function emptyState() {
-  return { version: 1, projects: [], entries: [], updatedAt: null };
+  return { version: 1, projects: [], tasks: [], entries: [], updatedAt: null };
 }
 
 function loadState() {
@@ -35,12 +35,16 @@ function loadState() {
 function normalizeState(raw) {
   const state = raw && typeof raw === "object" ? raw : {};
   const projects = Array.isArray(state.projects) ? state.projects : [];
+  const tasks = Array.isArray(state.tasks) ? state.tasks : [];
   const entries = Array.isArray(state.entries) ? state.entries : [];
   return {
     version: 1,
     projects: projects
       .filter((p) => p && typeof p.id === "string" && typeof p.name === "string")
       .map((p) => ({ id: p.id, name: p.name, archived: Boolean(p.archived) })),
+    tasks: tasks
+      .filter((t) => t && typeof t.id === "string" && typeof t.projectId === "string" && typeof t.title === "string" && t.title.trim())
+      .map((t) => ({ id: t.id, projectId: t.projectId, title: t.title.trim() })),
     entries: entries
       .filter(
         (e) =>
@@ -58,6 +62,7 @@ function normalizeState(raw) {
         projectId: e.projectId,
         minutes: Math.round(e.minutes),
         title: typeof e.title === "string" && e.title.trim() ? e.title.trim() : null,
+        taskId: typeof e.taskId === "string" ? e.taskId : null,
         category: typeof e.category === "string" ? e.category : null,
         note: typeof e.note === "string" && e.note.trim() ? e.note.trim() : null,
         start: typeof e.start === "string" ? e.start : null,

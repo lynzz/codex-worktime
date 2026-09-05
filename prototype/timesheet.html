@@ -95,7 +95,7 @@
 
   /* 周网格 */
   .tablewrap { overflow-x: auto; }
-  table.grid { border-collapse: collapse; width: 100%; min-width: 720px; }
+  table.grid { border-collapse: collapse; width: 100%; min-width: 840px; }
   table.grid th, table.grid td { border: 1px solid var(--border); padding: 4px 8px; text-align: center; }
   table.grid th { background: var(--bg); font-weight: 600; font-size: 12px; color: var(--muted); }
   table.grid th.today-col, table.grid td.today-col { background: var(--accent-soft); }
@@ -106,6 +106,7 @@
   table.grid input.cell:hover { border-color: var(--border); background: var(--card); }
   table.grid input.cell:focus { border-color: var(--accent); background: var(--card); }
   .multi-mark { color: var(--muted); font-size: 10px; vertical-align: super; cursor: help; }
+  .adhoc-row td, .adhoc-row input.cell { color: var(--muted); }
   input.inline-title { border: 1px solid transparent; background: transparent; border-radius: 6px; width: 100%; min-width: 120px; padding: 3px 6px; }
   input.inline-title:hover { border-color: var(--border); background: var(--card); }
   input.inline-title:focus { border-color: var(--accent); background: var(--card); }
@@ -192,7 +193,7 @@
 <script type="module">
 // ---------- 常量与状态 ----------
 const CATEGORIES = ["开发", "需求", "沟通", "验收", "其他"];
-const state = { version: 1, projects: [], entries: [], updatedAt: null };
+const state = { version: 1, projects: [], tasks: [], entries: [], updatedAt: null };
 const params = new URLSearchParams(location.search);
 let variant = ["week", "day", "month"].includes(params.get("variant")) ? params.get("variant") : "week";
 let weekAnchor = today();
@@ -346,30 +347,76 @@ function renderView() {
   else renderMonth(view);
 }
 
-// ---------- 变体一:周网格 ----------
+// ---------- 变体一:周网格(行 = 固定任务,项目为固定枚举) ----------
+function activeTasks() {
+  return state.tasks.filter((t) => {
+    const p = projectById(t.projectId);
+    return p && !p.archived;
+  });
+}
+function taskById(id) { return state.tasks.find((t) => t.id === id) ?? null; }
+function findTask(projectId, title) {
+  return state.tasks.find((t) => t.projectId === projectId && t.title === title) ?? null;
+}
+
+// 网格行:固定任务行在前;本周散录(未挂到固定任务的条目)按 项目+标题 聚合成「散录」行
+function weekRows() {
+  const rows = [];
+  for (const p of activeProjects()) {
+    state.tasks
+      .filter((t) => t.projectId === p.id)
+      .sort((a, b) => a.title.localeCompare(b.title, "zh"))
+      .forEach((t) => rows.push({ taskId: t.id, projectId: p.id, title: t.title, adhoc: false }));
+  }
+  const wkStart = startOfWeek(weekAnchor);
+  const adhoc = new Map();
+  entriesInRange(wkStart, addDays(wkStart, 6))
+    .filter((e) => !taskById(e.taskId))
+    .forEach((e) => {
+      const key = `${e.projectId}|${e.title ?? ""}`;
+      if (!adhoc.has(key)) adhoc.set(key, { taskId: null, projectId: e.projectId, title: e.title ?? null, adhoc: true });
+    });
+  return [...rows, ...adhoc.values()];
+}
+
+function rowEntries(row, date) {
+  if (row.taskId) return state.entries.filter((e) => e.taskId === row.taskId && e.date === date);
+  return state.entries.filter(
+    (e) => !taskById(e.taskId) && e.date === date && e.projectId === row.projectId && (e.title ?? null) === row.title,
+  );
+}
+
 function renderWeek(view) {
   const wkStart = startOfWeek(weekAnchor);
   const days = Array.from({ length: 7 }, (_, i) => addDays(wkStart, i));
   const projects = activeProjects();
+  const rows = weekRows();
   const t = today();
 
   const head = days.map((d) =>
     `<th class="${d === t ? "today-col" : ""}">${dowCN(d)}<br>${d.slice(5).replace("-", "/")}${d === t ? " ·今天" : ""}</th>`
   ).join("");
-  const body = projects.map((p) => {
+  const body = rows.map((row, ri) => {
     const cells = days.map((d) => {
-      const cellEntries = state.entries.filter((e) => e.date === d && e.projectId === p.id);
+      const cellEntries = rowEntries(row, d);
       const total = cellEntries.reduce((s, e) => s + e.minutes, 0);
       const mark = cellEntries.length > 1
         ? `<span class="multi-mark" title="${esc(cellEntries.map(describeEntry).join("\n"))}">×${cellEntries.length}</span>`
         : "";
-      const title = cellEntries.length ? esc(cellEntries.map(describeEntry).join("\n")) : "";
+      const tip = cellEntries.length ? esc(cellEntries.map(describeEntry).join("\n")) : "";
       return `<td class="${d === t ? "today-col" : ""}">
-        <input class="cell" data-project="${p.id}" data-date="${d}" value="${total ? hoursInputValue(total) : ""}" title="${title}" inputmode="decimal" placeholder="·">${mark}
+        <input class="cell" data-ri="${ri}" data-date="${d}" value="${total ? hoursInputValue(total) : ""}" title="${tip}" inputmode="decimal" placeholder="·">${mark}
       </td>`;
     }).join("");
-    const rowTotal = days.reduce((s, d) => s + minutesFor(p.id, d), 0);
-    return `<tr><td class="proj"><span class="dot" style="background:${projectColor(p.id)}"></span> ${esc(p.name)}</td>${cells}<td class="tot">${rowTotal ? fmtHours(rowTotal) : ""}</td></tr>`;
+    const rowTotal = days.reduce((s, d) => s + rowEntries(row, d).reduce((x, e) => x + e.minutes, 0), 0);
+    const taskCell = row.taskId
+      ? `${esc(row.title)} <button type="button" class="subtle" data-del-task="${row.taskId}" title="删除该任务行(已登记的工时保留为散录)">✕</button>`
+      : `${row.title ? esc(row.title) : '<span class="muted">(未命名)</span>'} <span class="cat-tag">散录</span>`;
+    return `<tr class="${row.adhoc ? "adhoc-row" : ""}">
+      <td class="proj"><span class="dot" style="background:${projectColor(row.projectId)}"></span> ${esc(projectName(row.projectId))}</td>
+      <td class="proj">${taskCell}</td>
+      ${cells}<td class="tot">${rowTotal ? fmtHours(rowTotal) : ""}</td>
+    </tr>`;
   }).join("");
   const foot = days.map((d) => `<td class="tot">${minutesOn(d) ? fmtHours(minutesOn(d)) : ""}</td>`).join("");
   const grand = days.reduce((s, d) => s + minutesOn(d), 0);
@@ -383,15 +430,23 @@ function renderWeek(view) {
           <button data-week="1">下一周 →</button>
           ${wkStart !== startOfWeek(today()) ? '<button id="week-today">本周</button>' : ""}
         </div>
-        <span class="hint">格子直接敲小时数(1.5 / 1:30 / 90m 均可),回车或 Tab 跳格,清空即删除;任务标题可稍后在「日清单」补填</span>
+        <span class="hint">一行一个任务,格子敲小时数(1.5 / 1:30 / 90m),回车或 Tab 跳格,清空即删除;非固定任务的记录自动聚合为「散录」行</span>
       </div>
       <div class="tablewrap">
         <table class="grid">
-          <tr><th>项目</th>${head}<th>周合计</th></tr>
-          ${body}
-          <tr><th>日合计</th>${foot}<td class="grand">${grand ? fmtHours(grand) : ""}</td></tr>
+          <tr><th>项目</th><th>任务</th>${head}<th>周合计</th></tr>
+          ${body || `<tr><td colspan="10" class="muted" style="text-align:center;padding:14px">还没有任务行,用下方表单添加第一个任务</td></tr>`}
+          <tr><th colspan="2">日合计</th>${foot}<td class="grand">${grand ? fmtHours(grand) : ""}</td></tr>
         </table>
       </div>
+      <form class="dayform" id="week-add-task" style="margin-top:12px">
+        <div class="field"><label>项目(固定枚举)</label>
+          <select id="wt-project">${projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select>
+        </div>
+        <div class="field" style="flex:1;min-width:180px"><label>任务标题</label><input id="wt-title" placeholder="如:登录页联调" style="width:100%"></div>
+        <button class="primary" type="submit">＋ 添加任务行</button>
+      </form>
+      <div class="form-error" id="wt-error"></div>
     </div>`;
 
   view.querySelectorAll("[data-week]").forEach((b) => b.onclick = () => { weekAnchor = addDays(weekAnchor, Number(b.dataset.week) * 7); renderView(); });
@@ -403,7 +458,25 @@ function renderWeek(view) {
       if (ev.key === "Enter") input.blur();
       if (ev.key === "Escape") { input.value = input.defaultValue; input.blur(); }
     });
-    input.addEventListener("change", () => { if (input.isConnected) commitWeekCell(input); });
+    input.addEventListener("change", () => { if (input.isConnected) commitWeekCell(rows[Number(input.dataset.ri)], input); });
+  });
+
+  view.querySelector("#week-add-task").onsubmit = (ev) => {
+    ev.preventDefault();
+    const errEl = view.querySelector("#wt-error");
+    errEl.textContent = "";
+    const projectId = view.querySelector("#wt-project").value;
+    const title = view.querySelector("#wt-title").value.trim();
+    if (!title) { errEl.textContent = "请填写任务标题"; return; }
+    if (findTask(projectId, title)) { errEl.textContent = "该项目下已存在同名任务行"; return; }
+    mutate((s) => s.tasks.push({ id: crypto.randomUUID(), projectId, title }));
+  };
+
+  view.querySelectorAll("[data-del-task]").forEach((b) => b.onclick = () => {
+    mutate((s) => {
+      s.tasks = s.tasks.filter((tk) => tk.id !== b.dataset.delTask);
+      s.entries.forEach((e) => { if (e.taskId === b.dataset.delTask) e.taskId = null; });
+    });
   });
 }
 
@@ -412,21 +485,30 @@ function hoursInputValue(minutes) {
   return String(Math.round(h * 100) / 100);
 }
 
-function commitWeekCell(input) {
-  const projectId = input.dataset.project;
+function commitWeekCell(row, input) {
   const date = input.dataset.date;
   const raw = input.value.trim();
-  const cellEntries = state.entries.filter((e) => e.date === date && e.projectId === projectId);
+  const matched = rowEntries(row, date);
 
   if (raw === "") {
-    if (cellEntries.length) mutate((s) => { s.entries = s.entries.filter((e) => !(e.date === date && e.projectId === projectId)); });
+    if (matched.length) {
+      const ids = new Set(matched.map((e) => e.id));
+      mutate((s) => { s.entries = s.entries.filter((e) => !ids.has(e.id)); });
+    }
     return;
   }
   const minutes = parseDurationInput(raw);
   if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 24 * 60) { renderView(); return; }
+  const ids = new Set(matched.map((e) => e.id));
   mutate((s) => {
-    s.entries = s.entries.filter((e) => !(e.date === date && e.projectId === projectId));
-    s.entries.push({ id: crypto.randomUUID(), date, projectId, minutes: Math.round(minutes), title: null, category: null, note: null, start: null, end: null });
+    s.entries = s.entries.filter((e) => !ids.has(e.id));
+    s.entries.push({
+      id: crypto.randomUUID(), date,
+      projectId: row.projectId,
+      minutes: Math.round(minutes), title: row.title,
+      taskId: row.taskId ?? findTask(row.projectId, row.title ?? "")?.id ?? null,
+      category: null, note: null, start: null, end: null,
+    });
   });
 }
 
@@ -459,7 +541,7 @@ function renderDay(view) {
 
       <form class="dayform" id="day-form">
         <div class="field"><label>项目</label><select id="f-project">${projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select></div>
-        <div class="field" style="flex:1;min-width:180px"><label>任务标题</label><input id="f-title" placeholder="在做什么,如:登录页联调" style="width:100%"></div>
+        <div class="field" style="flex:1;min-width:180px"><label>任务标题</label><input id="f-title" list="task-options" placeholder="在做什么,如:登录页联调" style="width:100%"></div>
         <div class="field"><label>开始(可选)</label><input type="time" id="f-start"></div>
         <div class="field"><label>结束(可选)</label><input type="time" id="f-end"></div>
         <div class="field"><label>时长(小时)</label><input id="f-dur" placeholder="1.5 或 1:30" style="width:110px"></div>
@@ -468,6 +550,7 @@ function renderDay(view) {
         <button class="primary" type="submit">添加</button>
       </form>
       <div class="form-error" id="day-error"></div>
+      <datalist id="task-options">${activeTasks().map((t) => `<option value="${esc(t.title)}">${esc(projectName(t.projectId))}</option>`).join("")}</datalist>
 
       <table class="rows">
         <tr><th>项目</th><th>任务标题</th><th>起止</th><th>时长</th><th>类别</th><th>备注</th><th></th></tr>
@@ -522,6 +605,7 @@ function renderDay(view) {
       st.entries.push({
         id: crypto.randomUUID(), date: dayAnchor, projectId,
         minutes: Math.round(minutes), title,
+        taskId: findTask(projectId, title)?.id ?? null,
         category: view.querySelector("#f-cat").value,
         note: note || null, start: startEl.value || null, end: endEl.value || null,
       });
@@ -593,12 +677,13 @@ function renderMonth(view) {
       <form class="dayform" id="month-add">
         <span class="title">${selectedDay.slice(5).replace("-", "/")} ${dowCN(selectedDay)} · 已登记 ${fmtHours(minutesOn(selectedDay))}</span>
         <div class="field"><label>项目</label><select id="m-project">${projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select></div>
-        <div class="field" style="flex:1;min-width:160px"><label>任务标题</label><input id="m-title" placeholder="在做什么" style="width:100%"></div>
+        <div class="field" style="flex:1;min-width:160px"><label>任务标题</label><input id="m-title" list="task-options" placeholder="在做什么" style="width:100%"></div>
         <div class="field"><label>时长(小时)</label><input id="m-dur" placeholder="1.5 或 1:30" style="width:110px"></div>
         <div class="field" style="flex:1;min-width:120px"><label>备注(可选)</label><input id="m-note" style="width:100%"></div>
         <button class="primary" type="submit">补录</button>
       </form>
       <div class="form-error" id="m-error"></div>
+      <datalist id="task-options">${activeTasks().map((t) => `<option value="${esc(t.title)}">${esc(projectName(t.projectId))}</option>`).join("")}</datalist>
       <table class="rows">
         ${selEntries.map((e) => `
           <tr>
@@ -635,10 +720,13 @@ function renderMonth(view) {
     const minutes = parseDurationInput(view.querySelector("#m-dur").value);
     if (!Number.isFinite(minutes) || minutes <= 0) { errEl.textContent = "请填写时长(支持 1.5 / 1:30 / 90m)"; return; }
     const note = view.querySelector("#m-note").value.trim();
+    const mProjectId = view.querySelector("#m-project").value;
     mutate((s) => {
       s.entries.push({
-        id: crypto.randomUUID(), date: selectedDay, projectId: view.querySelector("#m-project").value,
-        minutes: Math.round(minutes), title, category: null, note: note || null, start: null, end: null,
+        id: crypto.randomUUID(), date: selectedDay, projectId: mProjectId,
+        minutes: Math.round(minutes), title,
+        taskId: findTask(mProjectId, title)?.id ?? null,
+        category: null, note: note || null, start: null, end: null,
       });
     });
   };
