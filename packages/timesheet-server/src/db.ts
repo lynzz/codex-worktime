@@ -9,7 +9,7 @@ function loadEnvOnce() {
   const here = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
     path.resolve(here, "../../../.env.local"), // 仓库根
-    path.resolve(here, "../../.env.local"), // web/
+    path.resolve(here, "../../.env.local"), // 本包目录
   ];
   for (const file of candidates) {
     try {

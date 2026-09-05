@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { api } from "../src/server/api";
+import { api } from "../src/api";
 
 describe("GET /api/health", () => {
   it("返回 ok 与数据库心跳(未配置 DATABASE_URL 时为 not-configured)", async () => {
