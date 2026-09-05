@@ -41,3 +41,23 @@ export function isWeekend(key: string): boolean {
 export function sameMonth(a: string, b: string): boolean {
   return a.slice(0, 7) === b.slice(0, 7);
 }
+
+// 月历矩阵:以周一为首列的 42 天(6 行),非本月日期为空串
+export function monthDays(anchor: string): string[] {
+  const first = `${anchor.slice(0, 7)}-01`;
+  const gridStart = startOfWeek(first);
+  return Array.from({ length: 42 }, (_, i) => {
+    const key = addDays(gridStart, i);
+    return sameMonth(key, anchor) ? key : "";
+  });
+}
+
+export function monthStart(anchor: string): string {
+  return `${anchor.slice(0, 7)}-01`;
+}
+
+export function nextMonthFirst(anchor: string): string {
+  const [y, m] = anchor.split("-").map(Number);
+  const d = new Date(y!, m!, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}

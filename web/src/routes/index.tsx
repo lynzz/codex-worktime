@@ -5,6 +5,11 @@ import { Button, Chip } from "@heroui/react";
 import { z } from "zod";
 import {
   addDays,
+  dayOfWeekCN,
+  formatHours,
+  monthStart,
+  nextMonthFirst,
+  startOfWeek,
   todayKey,
   type Entry,
   type Project,
@@ -15,6 +20,7 @@ import { projectColor } from "~/lib/colors";
 import { ProjectsPanel } from "~/components/ProjectsPanel";
 import { DayList } from "~/components/DayList";
 import { WeekGrid } from "~/components/WeekGrid";
+import { MonthCalendar } from "~/components/MonthCalendar";
 
 const searchSchema = z.object({
   variant: z.enum(["week", "day", "month"]).catch("day"),
@@ -29,26 +35,23 @@ const searchSchema = z.object({
 const loadTimesheet = createServerFn({ method: "GET" })
   .validator((d: { date: string }) => d)
   .handler(async ({ data }) => {
-    const month = data.date.slice(0, 7);
-    const from = addDays(`${month}-01`, -7);
-    const to = addDays(nextMonthFirst(data.date), 7);
-    const [projectsRes, entriesRes, tasksRes] = await Promise.all([
+    // 覆盖所选月与当月(±7 天冗余跨月周),保证月历与汇总卡同时正确
+    const t = todayKey();
+    const from = addDays(monthStart(data.date < monthStart(t) ? data.date : t), -7);
+    const to = addDays(nextMonthFirst(data.date > t ? data.date : t), 7);
+    const [projectsRes, entriesRes, tasksRes, totalRes] = await Promise.all([
       honoApi.request("/api/projects"),
       honoApi.request(`/api/entries?from=${from}&to=${to}`),
       honoApi.request("/api/tasks"),
+      honoApi.request("/api/entries/total"),
     ]);
     return {
       projects: (await projectsRes.json()) as Project[],
       entries: (await entriesRes.json()) as Entry[],
       tasks: (await tasksRes.json()) as Task[],
+      totalMinutes: ((await totalRes.json()) as { minutes: number }).minutes,
     };
   });
-
-function nextMonthFirst(dateKey: string): string {
-  const [y, m] = dateKey.split("-").map(Number);
-  const d = new Date(y!, m!, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
 
 export const Route = createFileRoute("/")({
   validateSearch: (search) => searchSchema.parse(search),
@@ -58,7 +61,7 @@ export const Route = createFileRoute("/")({
 });
 
 function AppShell() {
-  const { projects, entries, tasks } = Route.useLoaderData();
+  const { projects, entries, tasks, totalMinutes } = Route.useLoaderData();
   const { variant, date } = Route.useSearch();
   const router = useRouter();
   const [panelOpen, setPanelOpen] = useState(false);
@@ -79,7 +82,7 @@ function AppShell() {
         </div>
         <div className="flex items-center gap-2">
           <Chip color="accent" variant="soft" size="sm">
-            总工时 0h
+            总工时 {formatHours(totalMinutes)}
           </Chip>
           <Button size="sm" variant="ghost" onPress={() => setPanelOpen(true)}>
             项目 ⚙
@@ -110,7 +113,12 @@ function AppShell() {
               </span>
             ))}
           </div>
-          <nav className="mt-6 flex gap-2">
+          <SummaryCards
+            entries={entries}
+            projects={active}
+            totalMinutes={totalMinutes}
+          />
+          <nav className="mt-4 flex gap-2">
             {(["week", "day", "month"] as const).map((v) => (
               <Button
                 key={v}
@@ -145,9 +153,14 @@ function AppShell() {
             />
           )}
           {variant === "month" && (
-            <section className="mt-6 rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-400">
-              月历建设中 —— T6 点亮
-            </section>
+            <MonthCalendar
+              date={date}
+              projects={projects}
+              entries={entries}
+              onDateChange={(d) => setSearch({ date: d })}
+              onGotoDay={(d) => setSearch({ variant: "day", date: d })}
+              onChanged={refresh}
+            />
           )}
         </>
       )}
@@ -160,5 +173,82 @@ function AppShell() {
         onChanged={refresh}
       />
     </main>
+  );
+}
+
+function SummaryCards({
+  entries,
+  projects,
+  totalMinutes,
+}: {
+  entries: Entry[];
+  projects: Project[];
+  totalMinutes: number;
+}) {
+  const t = todayKey();
+  const wkStart = startOfWeek(t);
+  const wkEnd = addDays(wkStart, 6);
+  const mStart = monthStart(t);
+  const mEndNext = nextMonthFirst(t);
+  const todayMin = entries.filter((e) => e.date === t).reduce((s, e) => s + e.minutes, 0);
+  const weekMin = entries
+    .filter((e) => e.date >= wkStart && e.date <= wkEnd)
+    .reduce((s, e) => s + e.minutes, 0);
+  const monthMin = entries
+    .filter((e) => e.date >= mStart && e.date < mEndNext)
+    .reduce((s, e) => s + e.minutes, 0);
+  const perProject = projects
+    .map((p) => ({
+      p,
+      minutes: entries
+        .filter((e) => e.projectId === p.id && e.date >= mStart && e.date < mEndNext)
+        .reduce((s, e) => s + e.minutes, 0),
+    }))
+    .filter((x) => x.minutes > 0);
+  const maxMinutes = Math.max(60, ...perProject.map((x) => x.minutes));
+
+  const card = (label: string, value: string) => (
+    <div className="flex-1 rounded-xl border border-gray-200 px-4 py-2">
+      <div className="text-xs text-gray-400">{label}</div>
+      <div className="text-xl font-bold">{value}</div>
+    </div>
+  );
+
+  return (
+    <div className="mt-4">
+      <div className="flex gap-3">
+        {card(`今日 ${dayOfWeekCN(t)}`, formatHours(todayMin))}
+        {card("本周", formatHours(weekMin))}
+        {card("本月", formatHours(monthMin))}
+        {card("累计", formatHours(totalMinutes))}
+      </div>
+      {perProject.length > 0 && (
+        <div className="mt-2 flex flex-col gap-1.5 rounded-xl border border-gray-200 px-4 py-2.5">
+          {perProject.map(({ p, minutes }) => (
+            <div key={p.id} className="flex items-center gap-3 text-sm">
+              <span className="flex w-40 items-center gap-1.5">
+                <span
+                  className="h-2.5 w-2.5 rounded-full"
+                  style={{ background: projectColor(p.id) }}
+                />
+                {p.name}
+              </span>
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
+                <div
+                  className="h-full rounded-full"
+                  style={{
+                    width: `${(minutes / maxMinutes) * 100}%`,
+                    background: projectColor(p.id),
+                  }}
+                />
+              </div>
+              <span className="w-14 text-right text-gray-500">
+                {formatHours(minutes)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, asc, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, asc, count, eq, gte, isNull, lte, sum } from "drizzle-orm";
 import { getDb } from "../db";
 import { entries, projects, tasks } from "../schema";
 import {
@@ -68,6 +68,12 @@ entriesRouter.post("/", async (c) => {
   const row = rows[0];
   if (!row) return c.json({ error: "创建失败" }, 500);
   return c.json(row satisfies Entry, 201);
+});
+
+// 全部条目的累计分钟(页头总工时徽章)
+entriesRouter.get("/total", async (c) => {
+  const rows = await getDb().select({ value: sum(entries.minutes) }).from(entries);
+  return c.json({ minutes: rows[0]?.value ?? 0 });
 });
 
 const replaceCellSchema = z.object({
