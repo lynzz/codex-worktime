@@ -102,6 +102,8 @@
   table.grid { border-collapse: collapse; width: 100%; min-width: 840px; }
   table.grid th, table.grid td { border: 1px solid var(--border); padding: 4px 8px; text-align: center; }
   table.grid th { background: var(--bg); font-weight: 600; font-size: 12px; color: var(--muted); }
+  table.grid th[data-go-day] { cursor: pointer; }
+  table.grid th[data-go-day]:hover { color: var(--accent); }
   table.grid th.today-col, table.grid td.today-col { background: var(--accent-soft); }
   table.grid td.proj { text-align: left; white-space: nowrap; }
   table.grid input.cell {
@@ -397,7 +399,7 @@ function renderWeek(view) {
   const t = today();
 
   const head = days.map((d) =>
-    `<th class="${d === t ? "today-col" : ""}">${dowCN(d)}<br>${d.slice(5).replace("-", "/")}${d === t ? " ·今天" : ""}</th>`
+    `<th class="${d === t ? "today-col" : ""}" data-go-day="${d}" title="在日清单中查看 ${d}">${dowCN(d)}<br>${d.slice(5).replace("-", "/")}${d === t ? " ·今天" : ""}</th>`
   ).join("");
   const body = rows.map((row, ri) => {
     const cells = days.map((d) => {
@@ -481,6 +483,8 @@ function renderWeek(view) {
       s.entries.forEach((e) => { if (e.taskId === b.dataset.delTask) e.taskId = null; });
     });
   });
+
+  view.querySelectorAll("th[data-go-day]").forEach((th) => th.onclick = () => gotoDay(th.dataset.goDay));
 }
 
 function hoursInputValue(minutes) {
@@ -519,6 +523,16 @@ function describeEntry(e) {
   const title = e.title ? `${e.title} ` : "";
   const cat = e.category ? `[${e.category}] ` : "";
   return `${title}${cat}${fmtHours(e.minutes)}${e.note ? ` ${e.note}` : ""}`;
+}
+
+// 带日期跨视图跳转:周表头 / 月历入口 → 日清单
+function gotoDay(date) {
+  dayAnchor = date;
+  variant = "day";
+  const p = new URLSearchParams(location.search);
+  p.set("variant", "day");
+  history.replaceState(null, "", `?${p.toString()}`);
+  render();
 }
 
 // ---------- 变体二:日清单 ----------
@@ -659,6 +673,7 @@ function renderMonth(view) {
     <div class="card">
       <form class="dayform" id="month-add">
         <span class="title">${selectedDay.slice(5).replace("-", "/")} ${dowCN(selectedDay)} · 已登记 ${fmtHours(minutesOn(selectedDay))}</span>
+        <button type="button" class="subtle" id="m-goto-day" title="在日清单中查看/编辑这一天">日清单 →</button>
         <div class="field"><label>项目</label><select id="m-project">${projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select></div>
         <div class="field" style="flex:1;min-width:160px"><label>任务标题</label><input id="m-title" list="task-options" placeholder="在做什么" style="width:100%"></div>
         <div class="field"><label>时长(小时)</label><input id="m-dur" placeholder="1.5 或 1:30" style="width:110px"></div>
@@ -692,6 +707,8 @@ function renderMonth(view) {
     selectedDay = cell.dataset.date;
     renderView();
   });
+
+  view.querySelector("#m-goto-day").onclick = () => gotoDay(selectedDay);
 
   view.querySelector("#month-add").onsubmit = (ev) => {
     ev.preventDefault();
