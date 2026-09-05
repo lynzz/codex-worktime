@@ -136,6 +136,20 @@ export async function runCli(argv: string[], runtime: CliRuntime = {}): Promise<
       stdout.write(`${JSON.stringify(result)}\n`);
     });
 
+  manual
+    .command("serve")
+    .description("Start the manual timesheet web app (web build output; PORT/--port, default 8787).")
+    .option("--port <number>", "listen port", (v: string) => Number(v))
+    .action(async (options: { port?: number }) => {
+      const { startManualServer, DEFAULT_MANUAL_SERVE_PORT } = await import("./manual/serve.js");
+      const port = options.port ?? (Number(process.env.PORT ?? 0) || DEFAULT_MANUAL_SERVE_PORT);
+      const child = startManualServer({ port, stdout });
+      child.on("exit", (code) => {
+        process.exit(code ?? 0);
+      });
+      await new Promise(() => {});
+    });
+
   const data = program.command("data").description("Back up or delete explicitly declared application-owned local data.");
   data
     .command("backup")

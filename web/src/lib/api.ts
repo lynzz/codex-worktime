@@ -51,6 +51,12 @@ export const api = {
   deleteTask: (id: string) =>
     request<{ ok: boolean }>(`/api/tasks/${id}`, { method: "DELETE" }),
 
+  resetManualData: () =>
+    request<{ ok: boolean }>("/api/projects/reset", {
+      method: "POST",
+      body: JSON.stringify({ confirm: "CLEAR_MANUAL_DATA" }),
+    }),
+
   replaceCell: (input: {
     date: string;
     projectId: string;

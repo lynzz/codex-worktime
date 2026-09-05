@@ -120,6 +120,26 @@ export function ProjectsPanel({
                   run={run}
                 />
               )}
+
+              <div className="mt-5 flex items-center justify-between border-t border-gray-100 pt-3">
+                <span className="max-w-52 text-xs text-gray-400">
+                  清空全部项目、任务行与工时记录(不可恢复,请先导出)
+                </span>
+                <Button
+                  size="sm"
+                  variant="danger-soft"
+                  onPress={() => {
+                    if (
+                      window.confirm("确定清空全部人工工时数据?") &&
+                      window.confirm("再次确认:清空后不可恢复(除非已导出)。")
+                    ) {
+                      void run(() => api.resetManualData());
+                    }
+                  }}
+                >
+                  清空
+                </Button>
+              </div>
             </Modal.Body>
             <Modal.Footer>
               <Button size="sm" variant="ghost" onPress={onClose}>

@@ -3,13 +3,24 @@ import { formatHours, parseDurationInput } from "../src/duration";
 import { monthDays, nextMonthFirst } from "../src/dates";
 
 describe("monthDays(月历矩阵)", () => {
-  it("2026-09:首格为 8/31 周一,共 42 格,非本月为空", () => {
+  it("2026-09:9/1 为周二,恰 1 个前置空格;非本月为空、顺序连续", () => {
     const grid = monthDays("2026-09-05");
     expect(grid).toHaveLength(42);
-    expect(grid[0]).toBe("2026-08-31");
+    expect(grid[0]).toBe("");
+    expect(grid[1]).toBe("2026-09-01");
     expect(grid[30]).toBe("2026-09-30");
     expect(grid[31]).toBe("");
-    expect(grid.filter(Boolean)).toHaveLength(30);
+    const days = grid.filter(Boolean);
+    expect(days).toHaveLength(30);
+    expect(days[0]).toBe("2026-09-01");
+    expect(days.at(-1)).toBe("2026-09-30");
+  });
+
+  it("2026-08:8/1 为周六,5 个前置空格回退到 7/27 当周", () => {
+    const grid = monthDays("2026-08-15");
+    expect(grid[4]).toBe("");
+    expect(grid[5]).toBe("2026-08-01");
+    expect(grid.filter(Boolean)).toHaveLength(31);
   });
 
   it("nextMonthFirst 跨年", () => {

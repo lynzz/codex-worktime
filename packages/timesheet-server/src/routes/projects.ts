@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { count, eq } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { getDb } from "../db.js";
 import { entries, projects, tasks } from "../schema.js";
 import {
@@ -9,6 +9,16 @@ import {
 } from "@codex-worktime/timesheet-core";
 
 export const projectsRouter = new Hono();
+
+// 一键清空人工工时域(spec #11 用户故事 19):要求显式确认串,防误触
+projectsRouter.post("/reset", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { confirm?: string };
+  if (body.confirm !== "CLEAR_MANUAL_DATA") {
+    return c.json({ error: "清空需要 confirm: CLEAR_MANUAL_DATA" }, 400);
+  }
+  await getDb().execute(sql`truncate table entries, tasks, projects cascade`);
+  return c.json({ ok: true });
+});
 
 function badRequest(c: { json: (b: unknown, s: 400) => Response }, message: string) {
   return c.json({ error: message }, 400);
