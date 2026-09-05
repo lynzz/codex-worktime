@@ -9,6 +9,7 @@ import {
   todayKey,
   type Entry,
   type Project,
+  type Task,
 } from "@codex-worktime/timesheet-core";
 import { api } from "~/lib/api";
 import { projectColor } from "~/lib/colors";
@@ -19,12 +20,14 @@ const selectCls =
 export function DayList({
   date,
   projects,
+  tasks,
   entries,
   onDateChange,
   onChanged,
 }: {
   date: string;
   projects: Project[];
+  tasks: Task[];
   entries: Entry[];
   onDateChange: (date: string) => void;
   onChanged: () => void;
@@ -126,6 +129,7 @@ export function DayList({
         <Input
           placeholder="任务标题,如:登录页联调"
           className="w-52"
+          list="task-options"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {
@@ -135,6 +139,15 @@ export function DayList({
             }
           }}
         />
+        <datalist id="task-options">
+          {tasks
+            .filter((t) => t.projectId === projectId)
+            .map((t) => (
+              <option key={t.id} value={t.title}>
+                {projects.find((p) => p.id === t.projectId)?.name}
+              </option>
+            ))}
+        </datalist>
         <Input
           placeholder="时长:1.5 / 1:30 / 90m"
           className="w-36"

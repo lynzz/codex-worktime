@@ -3,11 +3,13 @@ import { sql } from "drizzle-orm";
 import { getDb, dbConfigured } from "./db";
 import { projectsRouter } from "./routes/projects";
 import { entriesRouter } from "./routes/entries";
+import { tasksRouter } from "./routes/tasks";
 
 export const api = new Hono();
 
 api.route("/api/projects", projectsRouter);
 api.route("/api/entries", entriesRouter);
+api.route("/api/tasks", tasksRouter);
 
 api.get("/api/health", async (c) => {
   if (!dbConfigured()) {

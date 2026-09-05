@@ -8,6 +8,7 @@ import {
   todayKey,
   type Entry,
   type Project,
+  type Task,
 } from "@codex-worktime/timesheet-core";
 import { api as honoApi } from "@codex-worktime/timesheet-server";
 import { projectColor } from "~/lib/colors";
@@ -30,13 +31,15 @@ const loadTimesheet = createServerFn({ method: "GET" })
     const month = data.date.slice(0, 7);
     const from = addDays(`${month}-01`, -7);
     const to = addDays(nextMonthFirst(data.date), 7);
-    const [projectsRes, entriesRes] = await Promise.all([
+    const [projectsRes, entriesRes, tasksRes] = await Promise.all([
       honoApi.request("/api/projects"),
       honoApi.request(`/api/entries?from=${from}&to=${to}`),
+      honoApi.request("/api/tasks"),
     ]);
     return {
       projects: (await projectsRes.json()) as Project[],
       entries: (await entriesRes.json()) as Entry[],
+      tasks: (await tasksRes.json()) as Task[],
     };
   });
 
@@ -54,7 +57,7 @@ export const Route = createFileRoute("/")({
 });
 
 function AppShell() {
-  const { projects, entries } = Route.useLoaderData();
+  const { projects, entries, tasks } = Route.useLoaderData();
   const { variant, date } = Route.useSearch();
   const router = useRouter();
   const [panelOpen, setPanelOpen] = useState(false);
@@ -123,6 +126,7 @@ function AppShell() {
             <DayList
               date={date}
               projects={projects}
+              tasks={tasks}
               entries={entries}
               onDateChange={(d) => setSearch({ date: d })}
               onChanged={refresh}
@@ -138,6 +142,7 @@ function AppShell() {
 
       <ProjectsPanel
         projects={projects}
+        tasks={tasks}
         isOpen={panelOpen}
         onClose={() => setPanelOpen(false)}
         onChanged={refresh}

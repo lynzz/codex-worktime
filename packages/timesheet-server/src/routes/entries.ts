@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { and, asc, eq, gte, lte } from "drizzle-orm";
 import { getDb } from "../db";
-import { entries, projects } from "../schema";
+import { entries, projects, tasks } from "../schema";
 import {
   entryCreateSchema,
   entryPatchSchema,
@@ -41,6 +41,15 @@ entriesRouter.post("/", async (c) => {
     .where(eq(projects.id, parsed.data.projectId));
   if (!project) return c.json({ error: "项目不存在" }, 404);
 
+  // 自动关联:同项目下与任务行标题精确匹配时挂上(原型验证语义)
+  const sameProjectTasks = await db
+    .select()
+    .from(tasks)
+    .where(eq(tasks.projectId, parsed.data.projectId));
+  const matchedTask = sameProjectTasks.find(
+    (t) => t.title === parsed.data.title,
+  );
+
   const rows = await db
     .insert(entries)
     .values({
@@ -51,8 +60,7 @@ entriesRouter.post("/", async (c) => {
       minutes: parsed.data.minutes,
       category: parsed.data.category ?? null,
       note: parsed.data.note ?? null,
-      // 任务行关联在 T4 落地(同项目同标题精确匹配)
-      taskId: null,
+      taskId: matchedTask?.id ?? null,
     })
     .returning();
   const row = rows[0];

@@ -65,3 +65,18 @@ export const entryPatchSchema = z
   })
   .refine((v) => Object.keys(v).length > 0, { message: "至少提供一个字段" });
 export type EntryPatch = z.infer<typeof entryPatchSchema>;
+
+// —— 任务行(Task Row)契约:项目(固定枚举)+ 任务标题 ——
+
+export const taskSchema = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  title: z.string().min(1),
+});
+export type Task = z.infer<typeof taskSchema>;
+
+export const taskCreateSchema = z.object({
+  projectId: z.string().min(1, "项目不能为空"),
+  title: z.string().trim().min(1, "请填写任务标题").max(200, "任务标题过长"),
+});
+export type TaskCreate = z.infer<typeof taskCreateSchema>;
