@@ -210,7 +210,32 @@ export function DayList({
                   }}
                 />
               </td>
-              <td className="py-1.5 pr-2 font-semibold">{formatHours(e.minutes)}</td>
+              <td className="py-1 pr-2">
+                <Input
+                  aria-label="时长(小时)"
+                  className="w-16 text-center font-semibold"
+                  inputMode="decimal"
+                  defaultValue={
+                    Math.round((e.minutes / 60) * 100) / 100 || ""
+                  }
+                  title="支持 1.5 / 1:30 / 90m,失焦保存"
+                  onBlur={(ev) => {
+                    const raw = ev.target.value.trim();
+                    if (raw === "" || raw === String(Math.round((e.minutes / 60) * 100) / 100)) {
+                      if (raw === "") onChanged(); // 清空视为误触,回显
+                      return;
+                    }
+                    const minutes = parseDurationInput(raw);
+                    if (minutes === null || Number.isNaN(minutes) || minutes <= 0) {
+                      setError("时长格式:1.5 / 1:30 / 90m");
+                      onChanged(); // 回显服务器值
+                      return;
+                    }
+                    setError("");
+                    run(() => api.patchEntry(e.id, { minutes }));
+                  }}
+                />
+              </td>
               <td className="py-1.5 pr-2">
                 {e.category ? (
                   <Chip size="sm" variant="soft">

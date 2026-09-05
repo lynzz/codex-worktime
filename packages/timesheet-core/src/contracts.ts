@@ -60,6 +60,12 @@ export type EntryCreate = z.infer<typeof entryCreateSchema>;
 export const entryPatchSchema = z
   .object({
     title: z.string().trim().min(1, "请填写任务标题").max(200).optional(),
+    minutes: z
+      .number({ message: "请填写时长" })
+      .int("时长应为整分钟")
+      .min(1, "时长必须大于 0")
+      .max(24 * 60, "单条时长不能超过 24 小时")
+      .optional(),
     category: z.enum(CATEGORIES).nullable().optional(),
     note: z.string().trim().max(500).nullable().optional(),
   })

@@ -64,6 +64,38 @@ describe.skipIf(!hasTestDb)("entries API(集成,Neon test 分支)", () => {
     expect(((await empty.json()) as unknown[]).length).toBe(0);
   });
 
+  it("修改时长:合法分钟生效;0/小数 400", async () => {
+    const created = await post("/api/entries", {
+      date: "2026-09-05",
+      projectId,
+      title: "改时长任务",
+      minutes: 60,
+    });
+    const { id } = (await created.json()) as { id: string; minutes: number };
+
+    const patched = await api.request(`/api/entries/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ minutes: 90 }),
+    });
+    expect(patched.status).toBe(200);
+    expect(((await patched.json()) as { minutes: number }).minutes).toBe(90);
+
+    const zero = await api.request(`/api/entries/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ minutes: 0 }),
+    });
+    expect(zero.status).toBe(400);
+
+    const frac = await api.request(`/api/entries/${id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ minutes: 1.5 }),
+    });
+    expect(frac.status).toBe(400);
+  });
+
   it("区间过滤与排序(按日期)", async () => {
     await post("/api/entries", { date: "2026-09-01", projectId, title: "B", minutes: 30 });
     await post("/api/entries", { date: "2026-09-05", projectId, title: "A", minutes: 60 });
