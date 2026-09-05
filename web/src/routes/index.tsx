@@ -18,7 +18,7 @@ import {
 import { api as honoApi } from "@codex-worktime/timesheet-server";
 import { api } from "~/lib/api";
 import { projectColor } from "~/lib/colors";
-import { buildTimesheetCsv, downloadText } from "~/lib/export";
+import { downloadText } from "~/lib/export";
 import { ProjectsPanel } from "~/components/ProjectsPanel";
 import { DayList } from "~/components/DayList";
 import { WeekGrid } from "~/components/WeekGrid";
@@ -75,16 +75,9 @@ function AppShell() {
     void router.navigate({ search: { variant, date, ...patch } as never });
   };
 
-  async function exportCsv() {
-    const [allEntries, allProjects] = await Promise.all([
-      api.listEntries(),
-      api.listProjects(),
-    ]);
-    downloadText(
-      `工时_${date.replaceAll("-", "")}.csv`,
-      buildTimesheetCsv(allEntries, allProjects),
-      "text/csv;charset=utf-8",
-    );
+  // 按 EQA 平台任务清单模板导出(服务端生成)
+  function exportXlsx() {
+    window.location.href = "/api/export/xlsx";
   }
 
   async function exportJson() {
@@ -115,8 +108,8 @@ function AppShell() {
           <Chip color="accent" variant="soft" size="sm">
             总工时 {formatHours(totalMinutes)}
           </Chip>
-          <Button size="sm" variant="ghost" onPress={() => void exportCsv()}>
-            导出 CSV
+          <Button size="sm" variant="ghost" onPress={exportXlsx}>
+            导出 XLSX
           </Button>
           <Button size="sm" variant="ghost" onPress={() => void exportJson()}>
             导出 JSON
