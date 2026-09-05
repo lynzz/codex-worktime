@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { asc, sql } from "drizzle-orm";
+import { and, asc, gte, lte, sql } from "drizzle-orm";
 import { getDb, dbConfigured } from "./db.js";
 import { projectsRouter } from "./routes/projects.js";
 import { entriesRouter } from "./routes/entries.js";
@@ -16,18 +16,54 @@ api.route("/api/projects", projectsRouter);
 api.route("/api/entries", entriesRouter);
 api.route("/api/tasks", tasksRouter);
 
+// 导出时间过滤:?month=YYYY-MM 或 ?from=YYYY-MM-DD&to=YYYY-MM-DD;缺省导出全部
+function resolveExportRange(c: { req: { query: (k: string) => string | undefined }; json: (b: unknown, s: 400) => Response }):
+  | { error: Response }
+  | { from?: string; to?: string; label: string } {
+  const month = c.req.query("month");
+  const from = c.req.query("from");
+  const to = c.req.query("to");
+  if (month && (from || to)) {
+    return { error: c.json({ error: "month 与 from/to 不能同时使用" }, 400) };
+  }
+  if (month) {
+    const m = /^(\d{4})-(\d{2})$/.exec(month);
+    if (!m) return { error: c.json({ error: "month 应为 YYYY-MM" }, 400) };
+    const [y, mo] = [Number(m[1]), Number(m[2])];
+    const lastDay = new Date(y, mo, 0).getDate();
+    return { from: `${month}-01`, to: `${month}-${String(lastDay).padStart(2, "0")}`, label: month.replaceAll("-", "") };
+  }
+  if (from || to) {
+    const okDate = (v?: string) => Boolean(v && /^\d{4}-\d{2}-\d{2}$/.test(v));
+    if (!okDate(from) || !okDate(to)) {
+      return { error: c.json({ error: "from 与 to 需成对提供,格式 YYYY-MM-DD" }, 400) };
+    }
+    return { from, to, label: `${from!.replaceAll("-", "")}-${to!.replaceAll("-", "")}` };
+  }
+  return { label: "all" };
+}
+
 // 按 EQA 平台任务清单模板导出 XLSX(聚合口径:项目+任务)
 api.get("/api/export/xlsx", async (c) => {
+  const range = resolveExportRange(c);
+  if ("error" in range) return range.error;
+
   const db = getDb();
+  const conditions = [];
+  if (range.from) conditions.push(gte(entriesTable.date, range.from));
+  if (range.to) conditions.push(lte(entriesTable.date, range.to));
   const [projects, entries] = await Promise.all([
     db.select().from(projectsTable).orderBy(asc(projectsTable.name)),
-    db.select().from(entriesTable).orderBy(asc(entriesTable.date)),
+    db
+      .select()
+      .from(entriesTable)
+      .where(conditions.length ? and(...conditions) : undefined)
+      .orderBy(asc(entriesTable.date)),
   ]);
   const buffer = await buildTaskListWorkbook(aggregateTaskRows(projects, entries));
-  const today = new Date().toISOString().slice(0, 10).replaceAll("-", "");
   c.header(
     "content-disposition",
-    `attachment; filename="task-list-${today}.xlsx"; filename*=UTF-8''${encodeURIComponent(`工时任务清单_${today}`)}.xlsx`,
+    `attachment; filename="task-list-${range.label}.xlsx"; filename*=UTF-8''${encodeURIComponent(`工时任务清单_${range.label}`)}.xlsx`,
   );
   c.header("content-type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   return c.body(new Uint8Array(buffer));

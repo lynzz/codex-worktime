@@ -46,6 +46,44 @@ describe.skipIf(!hasTestDb)("GET /api/export/xlsx(模板导出,集成)", () => {
     await post("/api/entries", { date: "2026-09-05", projectId: "p1", title: "微生物字典 UI 调试", minutes: 90, category: "开发" });
   });
 
+  it("按月份与时间范围过滤;非法参数 400", async () => {
+    await post("/api/entries", { date: "2026-08-20", projectId: "p1", title: "八月旧任务", minutes: 60 });
+
+    const titlesOf = async (url: string) => {
+      const res = await api.request(url);
+      expect(res.status).toBe(200);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(await res.arrayBuffer());
+      const titles: string[] = [];
+      wb.getWorksheet("任务清单")!.eachRow((row, number) => {
+        if (number >= 2) {
+          const v = row.getCell(3).value;
+          if (typeof v === "string") titles.push(v);
+        }
+      });
+      return { headers: res.headers, titles };
+    };
+
+    const byMonth = await titlesOf("/api/export/xlsx?month=2026-09");
+    expect(byMonth.headers.get("content-disposition")).toContain("task-list-202609.xlsx");
+    expect(byMonth.titles).toContain("生成证书联调");
+    expect(byMonth.titles).not.toContain("八月旧任务");
+
+    const byRange = await titlesOf("/api/export/xlsx?from=2026-08-01&to=2026-08-31");
+    expect(byRange.headers.get("content-disposition")).toContain(
+      "task-list-20260801-20260831.xlsx",
+    );
+    expect(byRange.titles).toContain("八月旧任务");
+    expect(byRange.titles).not.toContain("生成证书联调");
+
+    const bad1 = await api.request("/api/export/xlsx?month=20269");
+    expect(bad1.status).toBe(400);
+    const bad2 = await api.request("/api/export/xlsx?from=2026-09-01");
+    expect(bad2.status).toBe(400);
+    const bad3 = await api.request("/api/export/xlsx?month=2026-09&from=2026-09-01&to=2026-09-30");
+    expect(bad3.status).toBe(400);
+  });
+
   it("返回可解析的 xlsx:表头/聚合行/成本公式/汇总公式齐全", async () => {
     const res = await api.request("/api/export/xlsx");
     expect(res.status).toBe(200);

@@ -23,6 +23,7 @@ import { ProjectsPanel } from "~/components/ProjectsPanel";
 import { DayList } from "~/components/DayList";
 import { WeekGrid } from "~/components/WeekGrid";
 import { MonthCalendar } from "~/components/MonthCalendar";
+import { ExportDialog } from "~/components/ExportDialog";
 
 const searchSchema = z.object({
   variant: z.enum(["week", "day", "month"]).catch("day"),
@@ -67,6 +68,7 @@ function AppShell() {
   const { variant, date } = Route.useSearch();
   const router = useRouter();
   const [panelOpen, setPanelOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const active = projects.filter((p) => !p.archived);
   const refresh = () => void router.invalidate();
 
@@ -75,10 +77,7 @@ function AppShell() {
     void router.navigate({ search: { variant, date, ...patch } as never });
   };
 
-  // 按 EQA 平台任务清单模板导出(服务端生成)
-  function exportXlsx() {
-    window.location.href = "/api/export/xlsx";
-  }
+
 
   async function exportJson() {
     const [allEntries, allProjects, allTasks] = await Promise.all([
@@ -108,7 +107,7 @@ function AppShell() {
           <Chip color="accent" variant="soft" size="sm">
             总工时 {formatHours(totalMinutes)}
           </Chip>
-          <Button size="sm" variant="ghost" onPress={exportXlsx}>
+          <Button size="sm" variant="ghost" onPress={() => setExportOpen(true)}>
             导出 XLSX
           </Button>
           <Button size="sm" variant="ghost" onPress={() => void exportJson()}>
@@ -208,6 +207,8 @@ function AppShell() {
           )}
         </>
       )}
+
+      <ExportDialog isOpen={exportOpen} onClose={() => setExportOpen(false)} />
 
       <ProjectsPanel
         projects={projects}
