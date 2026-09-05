@@ -144,7 +144,6 @@
   .cal-entry .dot { flex-shrink: 0; }
   .cal-entry-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .cal-entry-hrs { color: var(--muted); flex-shrink: 0; }
-  .cal-more { font-size: 10px; color: var(--muted); margin-top: 2px; }
   .cal .weekend { background: #fbfbfc; }
   .monthstats { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
   .monthstats b { color: var(--text); }
@@ -616,19 +615,18 @@ function renderMonth(view) {
     if (!sameMonth(d, monthAnchor)) return `<div class="day" style="visibility:hidden"></div>`;
     const dayEntries = entriesOn(d);
     const total = minutesOn(d);
-    const lines = dayEntries.slice(0, 4).map((e) => `
+    const lines = dayEntries.map((e) => `
       <div class="cal-entry" title="${esc(describeEntry(e))}">
         <span class="dot" style="background:${projectColor(e.projectId)}"></span>
         <span class="cal-entry-title">${esc(e.title ?? "(未填标题)")}</span>
         <span class="cal-entry-hrs">${fmtHours(e.minutes)}</span>
       </div>`).join("");
-    const more = dayEntries.length > 4 ? `<div class="cal-more">还有 ${dayEntries.length - 4} 条…</div>` : "";
     return `<div class="day ${isWeekend(d) ? "weekend" : ""} ${d === t ? "is-today" : ""} ${d === selectedDay ? "selected" : ""}" data-date="${d}">
       <div class="dayhead">
         <span class="daynum">${parseInt(d.slice(8), 10)}日</span>
         ${total ? `<span class="daytotal">${fmtHours(total)}</span>` : ""}
       </div>
-      ${lines}${more}
+      ${lines}
     </div>`;
   }).join("");
 
