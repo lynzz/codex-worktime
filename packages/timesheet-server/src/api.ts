@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { sql } from "drizzle-orm";
-import { getDb, dbConfigured } from "./db";
-import { projectsRouter } from "./routes/projects";
-import { entriesRouter } from "./routes/entries";
-import { tasksRouter } from "./routes/tasks";
+import { getDb, dbConfigured } from "./db.js";
+import { projectsRouter } from "./routes/projects.js";
+import { entriesRouter } from "./routes/entries.js";
+import { tasksRouter } from "./routes/tasks.js";
 
 export const api = new Hono();
 

@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { count, eq } from "drizzle-orm";
-import { getDb } from "../db";
-import { entries, projects, tasks } from "../schema";
+import { getDb } from "../db.js";
+import { entries, projects, tasks } from "../schema.js";
 import {
   projectCreateSchema,
   projectPatchSchema,

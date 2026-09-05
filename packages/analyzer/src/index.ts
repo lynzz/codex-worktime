@@ -125,6 +125,17 @@ export async function runCli(argv: string[], runtime: CliRuntime = {}): Promise<
       }
     });
 
+  const manual = program.command("manual").description("Manual human-declared timesheet (ADR-0003).");
+  manual
+    .command("import")
+    .description("Idempotently import a prototype timesheet JSON into the Neon manual store.")
+    .argument("<file>", "prototype timesheet JSON file")
+    .action(async (file: string) => {
+      const { importPrototypeTimesheet } = await import("./manual/import-prototype.js");
+      const result = await importPrototypeTimesheet(await readJson(file));
+      stdout.write(`${JSON.stringify(result)}\n`);
+    });
+
   const data = program.command("data").description("Back up or delete explicitly declared application-owned local data.");
   data
     .command("backup")

@@ -1,4 +1,4 @@
-import type { Entry, Project, Task } from "./contracts";
+import type { Entry, Project, Task } from "./contracts.js";
 
 // 周网格行:固定任务行(按项目分组)+ 散录聚合行(未挂任务行的条目按 项目+标题 聚合)。
 // 任何已录数据都不会从网格消失(ADR-0003 / 原型验证语义)。

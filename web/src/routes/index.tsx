@@ -16,7 +16,9 @@ import {
   type Task,
 } from "@codex-worktime/timesheet-core";
 import { api as honoApi } from "@codex-worktime/timesheet-server";
+import { api } from "~/lib/api";
 import { projectColor } from "~/lib/colors";
+import { buildTimesheetCsv, downloadText } from "~/lib/export";
 import { ProjectsPanel } from "~/components/ProjectsPanel";
 import { DayList } from "~/components/DayList";
 import { WeekGrid } from "~/components/WeekGrid";
@@ -73,6 +75,35 @@ function AppShell() {
     void router.navigate({ search: { variant, date, ...patch } as never });
   };
 
+  async function exportCsv() {
+    const [allEntries, allProjects] = await Promise.all([
+      api.listEntries(),
+      api.listProjects(),
+    ]);
+    downloadText(
+      `工时_${date.replaceAll("-", "")}.csv`,
+      buildTimesheetCsv(allEntries, allProjects),
+      "text/csv;charset=utf-8",
+    );
+  }
+
+  async function exportJson() {
+    const [allEntries, allProjects, allTasks] = await Promise.all([
+      api.listEntries(),
+      api.listProjects(),
+      api.listTasks(),
+    ]);
+    downloadText(
+      `工时数据_${date.replaceAll("-", "")}.json`,
+      JSON.stringify(
+        { exportedAt: new Date().toISOString(), projects: allProjects, tasks: allTasks, entries: allEntries },
+        null,
+        2,
+      ),
+      "application/json",
+    );
+  }
+
   return (
     <main className="mx-auto max-w-5xl p-6">
       <header className="flex items-center justify-between">
@@ -84,6 +115,12 @@ function AppShell() {
           <Chip color="accent" variant="soft" size="sm">
             总工时 {formatHours(totalMinutes)}
           </Chip>
+          <Button size="sm" variant="ghost" onPress={() => void exportCsv()}>
+            导出 CSV
+          </Button>
+          <Button size="sm" variant="ghost" onPress={() => void exportJson()}>
+            导出 JSON
+          </Button>
           <Button size="sm" variant="ghost" onPress={() => setPanelOpen(true)}>
             项目 ⚙
           </Button>

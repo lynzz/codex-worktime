@@ -1,8 +1,8 @@
 import { Hono } from "hono";
 import { z } from "zod";
 import { and, asc, count, eq, gte, isNull, lte, sum } from "drizzle-orm";
-import { getDb } from "../db";
-import { entries, projects, tasks } from "../schema";
+import { getDb } from "../db.js";
+import { entries, projects, tasks } from "../schema.js";
 import {
   cellReplaceMatches,
   entryCreateSchema,

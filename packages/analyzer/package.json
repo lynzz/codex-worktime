@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@codex-worktime/timesheet-server": "^0.1.0",
     "@js-temporal/polyfill": "^0.5.1",
     "better-sqlite3": "^12.8.0",
     "commander": "^14.0.2",

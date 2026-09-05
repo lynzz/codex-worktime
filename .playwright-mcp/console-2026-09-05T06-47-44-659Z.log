@@ -1,2 +1,0 @@
-[     627ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:8792/node_modules/.vite/deps/react-dom_client.js?v=1ff0971d:14335
-[     663ms] [WARNING] A PressResponder was rendered without a pressable child. Either call the usePress hook, or wrap your DOM node with <Pressable> component. @ http://localhost:8792/node_modules/.vite/deps/@heroui_react.js?v=1ff0971d:11989
