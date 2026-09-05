@@ -122,7 +122,6 @@
   table.rows th { text-align: left; font-size: 12px; color: var(--muted); border-bottom: 1px solid var(--border); padding: 4px 8px; }
   table.rows td { border-bottom: 1px solid var(--border); padding: 6px 8px; }
   .cat-tag { font-size: 12px; background: var(--bg); border-radius: 6px; padding: 1px 8px; color: var(--muted); }
-  .time-range { font-variant-numeric: tabular-nums; color: var(--muted); }
 
   /* 月日历 */
   .cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
@@ -227,10 +226,6 @@ function parseDurationInput(text) {
   if ((m = t.match(/^(\d+):([0-5]?\d)$/))) return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
   if ((m = t.match(/^(\d+)h(\d+)?$/))) return parseInt(m[1], 10) * 60 + (m[2] ? parseInt(m[2], 10) : 0);
   return NaN; // 有内容但格式不对
-}
-function hhmmToMinutes(t) {
-  const m = String(t ?? "").match(/^(\d{1,2}):(\d{2})$/);
-  return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
 }
 
 // ---------- 领域查询 ----------
@@ -514,9 +509,8 @@ function commitWeekCell(row, input) {
 
 function describeEntry(e) {
   const title = e.title ? `${e.title} ` : "";
-  const time = e.start && e.end ? `${e.start}–${e.end} ` : "";
   const cat = e.category ? `[${e.category}] ` : "";
-  return `${title}${time}${cat}${fmtHours(e.minutes)}${e.note ? ` ${e.note}` : ""}`;
+  return `${title}${cat}${fmtHours(e.minutes)}${e.note ? ` ${e.note}` : ""}`;
 }
 
 // ---------- 变体二:日清单 ----------
@@ -542,8 +536,6 @@ function renderDay(view) {
       <form class="dayform" id="day-form">
         <div class="field"><label>项目</label><select id="f-project">${projects.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}</select></div>
         <div class="field" style="flex:1;min-width:180px"><label>任务标题</label><input id="f-title" list="task-options" placeholder="在做什么,如:登录页联调" style="width:100%"></div>
-        <div class="field"><label>开始(可选)</label><input type="time" id="f-start"></div>
-        <div class="field"><label>结束(可选)</label><input type="time" id="f-end"></div>
         <div class="field"><label>时长(小时)</label><input id="f-dur" placeholder="1.5 或 1:30" style="width:110px"></div>
         <div class="field"><label>类别</label><select id="f-cat">${CATEGORIES.map((c) => `<option>${c}</option>`).join("")}</select></div>
         <div class="field" style="flex:1;min-width:160px"><label>备注(可选)</label><input id="f-note" style="width:100%"></div>
@@ -553,17 +545,16 @@ function renderDay(view) {
       <datalist id="task-options">${activeTasks().map((t) => `<option value="${esc(t.title)}">${esc(projectName(t.projectId))}</option>`).join("")}</datalist>
 
       <table class="rows">
-        <tr><th>项目</th><th>任务标题</th><th>起止</th><th>时长</th><th>类别</th><th>备注</th><th></th></tr>
+        <tr><th>项目</th><th>任务标题</th><th>时长</th><th>类别</th><th>备注</th><th></th></tr>
         ${list.map((e) => `
           <tr>
             <td><span class="dot" style="background:${projectColor(e.projectId)}"></span> ${esc(projectName(e.projectId))}</td>
             <td><input class="inline-title" data-title="${e.id}" value="${esc(e.title ?? "")}" placeholder="(补填标题)"></td>
-            <td class="time-range">${e.start && e.end ? `${e.start}–${e.end}` : "—"}</td>
             <td class="tot">${fmtHours(e.minutes)}</td>
             <td>${e.category ? `<span class="cat-tag">${esc(e.category)}</span>` : "—"}</td>
             <td class="muted">${esc(e.note ?? "")}</td>
             <td><button type="button" class="subtle" data-del="${e.id}">删除</button></td>
-          </tr>`).join("") || `<tr><td colspan="7" class="muted" style="text-align:center;padding:18px">这一天还没有记录</td></tr>`}
+          </tr>`).join("") || `<tr><td colspan="6" class="muted" style="text-align:center;padding:18px">这一天还没有记录</td></tr>`}
       </table>
     </div>`;
 
@@ -572,17 +563,6 @@ function renderDay(view) {
   const todayBtn = view.querySelector("#day-today");
   if (todayBtn) todayBtn.onclick = () => { dayAnchor = today(); renderView(); };
 
-  const startEl = view.querySelector("#f-start");
-  const endEl = view.querySelector("#f-end");
-  const durEl = view.querySelector("#f-dur");
-  function syncDuration() {
-    const s = hhmmToMinutes(startEl.value);
-    const e = hhmmToMinutes(endEl.value);
-    if (s != null && e != null && e > s) durEl.value = hoursInputValue(e - s);
-  }
-  startEl.onchange = syncDuration;
-  endEl.onchange = syncDuration;
-
   view.querySelector("#day-form").onsubmit = (ev) => {
     ev.preventDefault();
     const err = view.querySelector("#day-error");
@@ -590,16 +570,8 @@ function renderDay(view) {
     const projectId = view.querySelector("#f-project").value;
     const title = view.querySelector("#f-title").value.trim();
     if (!title) { err.textContent = "请填写任务标题"; return; }
-    let minutes = null;
-    const s = hhmmToMinutes(startEl.value);
-    const e = hhmmToMinutes(endEl.value);
-    if (s != null && e != null) {
-      if (e <= s) { err.textContent = "结束时间需晚于开始时间(不支持跨天)"; return; }
-      minutes = e - s;
-    } else {
-      minutes = parseDurationInput(durEl.value);
-      if (!Number.isFinite(minutes) || minutes <= 0) { err.textContent = "请填写起止时间,或时长(支持 1.5 / 1:30 / 90m)"; return; }
-    }
+    const minutes = parseDurationInput(view.querySelector("#f-dur").value);
+    if (!Number.isFinite(minutes) || minutes <= 0) { err.textContent = "请填写时长(支持 1.5 / 1:30 / 90m)"; return; }
     const note = view.querySelector("#f-note").value.trim();
     mutate((st) => {
       st.entries.push({
@@ -607,7 +579,7 @@ function renderDay(view) {
         minutes: Math.round(minutes), title,
         taskId: findTask(projectId, title)?.id ?? null,
         category: view.querySelector("#f-cat").value,
-        note: note || null, start: startEl.value || null, end: endEl.value || null,
+        note: note || null,
       });
     });
   };
@@ -689,7 +661,6 @@ function renderMonth(view) {
           <tr>
             <td><span class="dot" style="background:${projectColor(e.projectId)}"></span> ${esc(projectName(e.projectId))}</td>
             <td>${e.title ? esc(e.title) : '<span class="muted">(未填标题)</span>'}</td>
-            <td class="time-range">${e.start && e.end ? `${e.start}–${e.end}` : "—"}</td>
             <td class="tot">${fmtHours(e.minutes)}</td>
             <td>${e.category ? `<span class="cat-tag">${esc(e.category)}</span>` : "—"}</td>
             <td class="muted">${esc(e.note ?? "")}</td>
@@ -811,10 +782,10 @@ function download(filename, text, type) {
   URL.revokeObjectURL(a.href);
 }
 document.getElementById("btn-export-csv").onclick = () => {
-  const rows = [["日期", "星期", "项目", "任务标题", "类别", "开始", "结束", "分钟", "小时", "备注"]];
-  state.entries.slice().sort((a, b) => a.date.localeCompare(b.date) || (a.start ?? "99:99").localeCompare(b.start ?? "99:99"))
+  const rows = [["日期", "星期", "项目", "任务标题", "类别", "分钟", "小时", "备注"]];
+  state.entries.slice().sort((a, b) => a.date.localeCompare(b.date) || String(a.title ?? "").localeCompare(String(b.title ?? "")))
     .forEach((e) => rows.push([
-      e.date, dowCN(e.date), projectName(e.projectId), e.title ?? "", e.category ?? "", e.start ?? "", e.end ?? "",
+      e.date, dowCN(e.date), projectName(e.projectId), e.title ?? "", e.category ?? "",
       String(e.minutes), String(Math.round(e.minutes / 60 * 100) / 100), e.note ?? "",
     ]));
   const csv = "\uFEFF" + rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\r\n");
