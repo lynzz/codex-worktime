@@ -21,7 +21,9 @@ export function HeroSelect({
       selectedKey={selectedKey}
       onSelectionChange={(key) => key != null && onSelectionChange(String(key))}
     >
-      <Select.Trigger />
+      <Select.Trigger>
+        <Select.Value />
+      </Select.Trigger>
       <Select.Popover>
         <ListBox items={items}>
           {(item) => (
