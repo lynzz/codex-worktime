@@ -23,6 +23,7 @@ import { ProjectsPanel } from "~/components/ProjectsPanel";
 import { DayList } from "~/components/DayList";
 import { WeekGrid } from "~/components/WeekGrid";
 import { MonthCalendar } from "~/components/MonthCalendar";
+import { QuickEntry } from "~/components/QuickEntry";
 import { ExportDialog } from "~/components/ExportDialog";
 
 const searchSchema = z.object({
@@ -145,8 +146,13 @@ function AppShell() {
           </div>
           <SummaryCards
             entries={entries}
-            projects={active}
             totalMinutes={totalMinutes}
+          />
+          <QuickEntry
+            date={date}
+            projects={projects}
+            tasks={tasks}
+            onChanged={refresh}
           />
           <Tabs
             aria-label="视图切换"
@@ -223,11 +229,9 @@ function AppShell() {
 
 function SummaryCards({
   entries,
-  projects,
   totalMinutes,
 }: {
   entries: Entry[];
-  projects: Project[];
   totalMinutes: number;
 }) {
   const t = todayKey();
@@ -242,16 +246,6 @@ function SummaryCards({
   const monthMin = entries
     .filter((e) => e.date >= mStart && e.date < mEndNext)
     .reduce((s, e) => s + e.minutes, 0);
-  const perProject = projects
-    .map((p) => ({
-      p,
-      minutes: entries
-        .filter((e) => e.projectId === p.id && e.date >= mStart && e.date < mEndNext)
-        .reduce((s, e) => s + e.minutes, 0),
-    }))
-    .filter((x) => x.minutes > 0);
-  const maxMinutes = Math.max(60, ...perProject.map((x) => x.minutes));
-
   const card = (label: string, value: string) => (
     <Card className="flex-1">
       <Card.Header className="px-4 pt-3 pb-0 text-xs text-gray-400">{label}</Card.Header>
@@ -267,35 +261,6 @@ function SummaryCards({
         {card("本月", formatHours(monthMin))}
         {card("累计", formatHours(totalMinutes))}
       </div>
-      {perProject.length > 0 && (
-        <Card className="mt-2">
-          <Card.Content className="flex flex-col gap-1.5 px-4 py-2.5">
-            {perProject.map(({ p, minutes }) => (
-              <div key={p.id} className="flex items-center gap-3 text-sm">
-                <span className="flex w-40 items-center gap-1.5">
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ background: projectColor(p.id) }}
-                  />
-                  {p.name}
-                </span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
-                <div
-                  className="h-full rounded-full"
-                  style={{
-                    width: `${(minutes / maxMinutes) * 100}%`,
-                    background: projectColor(p.id),
-                  }}
-                />
-              </div>
-              <span className="w-14 text-right text-gray-500">
-                {formatHours(minutes)}
-              </span>
-            </div>
-          ))}
-          </Card.Content>
-        </Card>
-      )}
     </div>
   );
 }
