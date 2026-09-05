@@ -1,30 +1,70 @@
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { Button, Chip, Input } from "@heroui/react";
-import type { Project } from "@codex-worktime/timesheet-core";
+import { Button, Chip } from "@heroui/react";
+import { z } from "zod";
+import {
+  addDays,
+  todayKey,
+  type Entry,
+  type Project,
+} from "@codex-worktime/timesheet-core";
 import { api as honoApi } from "@codex-worktime/timesheet-server";
-import { api } from "~/lib/api";
 import { projectColor } from "~/lib/colors";
 import { ProjectsPanel } from "~/components/ProjectsPanel";
+import { DayList } from "~/components/DayList";
 
-// 服务端函数:SSR 与客户端导航都在服务端执行,直连 Hono 应用
-const loadProjects = createServerFn({ method: "GET" }).handler(async () => {
-  const res = await honoApi.request("/api/projects");
-  return { projects: (await res.json()) as Project[] };
+const searchSchema = z.object({
+  variant: z.enum(["week", "day", "month"]).catch("day"),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .catch(todayKey()),
 });
 
+// 服务端函数:SSR 与客户端导航都在服务端执行,直连 Hono 应用。
+// 载入项目全集 + 所选日期所在月的条目(±7 天冗余覆盖跨月周)。
+const loadTimesheet = createServerFn({ method: "GET" })
+  .validator((d: { date: string }) => d)
+  .handler(async ({ data }) => {
+    const month = data.date.slice(0, 7);
+    const from = addDays(`${month}-01`, -7);
+    const to = addDays(nextMonthFirst(data.date), 7);
+    const [projectsRes, entriesRes] = await Promise.all([
+      honoApi.request("/api/projects"),
+      honoApi.request(`/api/entries?from=${from}&to=${to}`),
+    ]);
+    return {
+      projects: (await projectsRes.json()) as Project[],
+      entries: (await entriesRes.json()) as Entry[],
+    };
+  });
+
+function nextMonthFirst(dateKey: string): string {
+  const [y, m] = dateKey.split("-").map(Number);
+  const d = new Date(y!, m!, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+}
+
 export const Route = createFileRoute("/")({
-  loader: () => loadProjects(),
+  validateSearch: (search) => searchSchema.parse(search),
+  loaderDeps: ({ search: { date } }) => ({ date }),
+  loader: ({ deps: { date } }) => loadTimesheet({ data: { date } }),
   component: AppShell,
 });
 
 function AppShell() {
-  const { projects } = Route.useLoaderData();
+  const { projects, entries } = Route.useLoaderData();
+  const { variant, date } = Route.useSearch();
   const router = useRouter();
   const [panelOpen, setPanelOpen] = useState(false);
   const active = projects.filter((p) => !p.archived);
   const refresh = () => void router.invalidate();
+
+  const setSearch = (patch: { variant?: "week" | "day" | "month"; date?: string }) => {
+    // 对象始终携带全量搜索参数;路由搜索类型的推导与 zod catch 有出入,单点断言
+    void router.navigate({ search: { variant, date, ...patch } as never });
+  };
 
   return (
     <main className="mx-auto max-w-5xl p-6">
@@ -44,7 +84,12 @@ function AppShell() {
       </header>
 
       {active.length === 0 ? (
-        <Onboarding onChanged={refresh} />
+        <section className="mt-10 rounded-xl border border-dashed border-gray-300 p-10 text-center">
+          <p className="text-base font-semibold">先在「项目 ⚙」里添加一个外包项目</p>
+          <p className="mt-1 text-sm text-gray-400">
+            项目只用于分组,不与任何 AI 时长数据关联
+          </p>
+        </section>
       ) : (
         <>
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -62,13 +107,32 @@ function AppShell() {
             ))}
           </div>
           <nav className="mt-6 flex gap-2">
-            <Button variant="ghost" size="sm">周网格</Button>
-            <Button variant="ghost" size="sm">日清单</Button>
-            <Button variant="ghost" size="sm">月日历</Button>
+            {(["week", "day", "month"] as const).map((v) => (
+              <Button
+                key={v}
+                size="sm"
+                variant={variant === v ? "primary" : "ghost"}
+                onPress={() => setSearch({ variant: v })}
+              >
+                {v === "week" ? "周网格" : v === "day" ? "日清单" : "月日历"}
+              </Button>
+            ))}
           </nav>
-          <section className="mt-6 rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-400">
-            三视图建设中 —— T3 起逐票点亮
-          </section>
+
+          {variant === "day" && (
+            <DayList
+              date={date}
+              projects={projects}
+              entries={entries}
+              onDateChange={(d) => setSearch({ date: d })}
+              onChanged={refresh}
+            />
+          )}
+          {(variant === "week" || variant === "month") && (
+            <section className="mt-6 rounded-xl border border-dashed border-gray-300 p-10 text-center text-gray-400">
+              {variant === "week" ? "周网格" : "月日历"}建设中 —— 后续票点亮
+            </section>
+          )}
         </>
       )}
 
@@ -79,52 +143,5 @@ function AppShell() {
         onChanged={refresh}
       />
     </main>
-  );
-}
-
-function Onboarding({ onChanged }: { onChanged: () => void }) {
-  const [name, setName] = useState("");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-
-  async function create() {
-    if (!name.trim()) return;
-    setBusy(true);
-    setError("");
-    try {
-      await api.createProject({ name });
-      onChanged();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="mt-10 rounded-xl border border-dashed border-gray-300 p-10 text-center">
-      <p className="text-base font-semibold">先添加一个外包项目</p>
-      <p className="mt-1 text-sm text-gray-400">
-        项目只用于分组,不与任何 AI 时长数据关联
-      </p>
-      <div className="mt-4 flex justify-center gap-2">
-        <Input
-          placeholder="项目名,如 EQA Platform"
-          className="w-64"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              void create();
-            }
-          }}
-        />
-        <Button variant="primary" isDisabled={!name.trim() || busy} onPress={create}>
-          添加
-        </Button>
-      </div>
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-    </section>
   );
 }

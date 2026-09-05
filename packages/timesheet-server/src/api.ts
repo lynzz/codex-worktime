@@ -2,10 +2,12 @@ import { Hono } from "hono";
 import { sql } from "drizzle-orm";
 import { getDb, dbConfigured } from "./db";
 import { projectsRouter } from "./routes/projects";
+import { entriesRouter } from "./routes/entries";
 
 export const api = new Hono();
 
 api.route("/api/projects", projectsRouter);
+api.route("/api/entries", entriesRouter);
 
 api.get("/api/health", async (c) => {
   if (!dbConfigured()) {

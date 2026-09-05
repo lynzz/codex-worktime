@@ -1,4 +1,4 @@
-import type { Project, ProjectCreate, ProjectPatch } from "@codex-worktime/timesheet-core";
+import type { Project, ProjectCreate, ProjectPatch, Entry, EntryCreate, EntryPatch } from "@codex-worktime/timesheet-core";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -24,4 +24,21 @@ export const api = {
     }),
   deleteProject: (id: string) =>
     request<{ ok: boolean }>(`/api/projects/${id}`, { method: "DELETE" }),
+
+  listEntries: (from?: string, to?: string) =>
+    request<Entry[]>(
+      `/api/entries${from || to ? `?${new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) })}` : ""}`,
+    ),
+  createEntry: (input: EntryCreate) =>
+    request<Entry>("/api/entries", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  patchEntry: (id: string, patch: EntryPatch) =>
+    request<Entry>(`/api/entries/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
+  deleteEntry: (id: string) =>
+    request<{ ok: boolean }>(`/api/entries/${id}`, { method: "DELETE" }),
 };
