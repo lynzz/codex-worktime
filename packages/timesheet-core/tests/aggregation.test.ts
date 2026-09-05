@@ -55,7 +55,24 @@ describe("buildWeekRows(任务行 + 散录聚合)", () => {
     expect(rows).toHaveLength(2);
   });
 
-  it("行×日分组:任务行按 taskId,散举行按 项目+标题 且 taskId 为空", () => {
+  it("同名任务行存在时,未关联的同名条目归入该任务行格子(不消失)", () => {
+    const taskRow = { taskId: "t1", projectId: "p1", title: "联调", adhoc: false };
+    const list: Entry[] = [
+      { ...e("a", "2026-09-01", "p1", "联调"), taskId: null }, // 先有的条目
+      { ...e("b", "2026-09-01", "p1", "联调"), taskId: "t1" }, // 后挂上的
+    ];
+    // buildWeekRows:同名条目被任务行覆盖,不再生成散录行
+    const rows = buildWeekRows(projects, [{ id: "t1", projectId: "p1", title: "联调" }], list);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.adhoc).toBe(false);
+    // 格子匹配:两种条目都计入任务行
+    const cell = entriesForRow(taskRow, "2026-09-01", list, new Set(["t1"]));
+    expect(cell).toHaveLength(2);
+    // 整格替换谓词同样覆盖两种
+    expect(list.filter((x) => cellReplaceMatches({ date: "2026-09-01", projectId: "p1", taskId: "t1", title: "联调" }, x))).toHaveLength(2);
+  });
+
+  it("行×日分组:任务行收 taskId 匹配与同名未关联,散举行按 项目+标题 且 taskId 为空", () => {
     const taskRow = { taskId: "t1", projectId: "p1", title: "联调", adhoc: false };
     const adhocRow = { taskId: null, projectId: "p1", title: "支援", adhoc: true };
     const list: Entry[] = [
@@ -65,7 +82,7 @@ describe("buildWeekRows(任务行 + 散录聚合)", () => {
       e("d", "2026-09-01", "p1", "支援"),
     ];
     expect(entriesForRow(taskRow, "2026-09-01", list, new Set(["t1"]))).toHaveLength(2);
-    expect(entriesForRow(taskRow, "2026-09-02", list, new Set(["t1"]))).toHaveLength(0);
+    expect(entriesForRow(taskRow, "2026-09-02", list, new Set(["t1"]))).toHaveLength(1);
     expect(entriesForRow(adhocRow, "2026-09-01", list, new Set())).toHaveLength(1);
   });
 

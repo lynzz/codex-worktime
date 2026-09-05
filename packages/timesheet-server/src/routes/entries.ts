@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, asc, count, eq, gte, isNull, lte, sum } from "drizzle-orm";
+import { and, asc, count, eq, gte, isNull, lte, or, sum } from "drizzle-orm";
 import { getDb } from "../db.js";
 import { entries, projects, tasks } from "../schema.js";
 import {
@@ -122,12 +122,24 @@ entriesRouter.post("/replace-cell", async (c) => {
     return c.json({ error: "缺少替换内容" }, 400);
   }
 
+  // 任务格:taskId 匹配 或 同名未关联(与 core 匹配语义一致);
+  // 散录格:未挂行 + 项目+标题
   const dayEntries = await db
     .select()
     .from(entries)
     .where(
       taskId
-        ? and(eq(entries.date, date), eq(entries.taskId, taskId))
+        ? and(
+            eq(entries.date, date),
+            or(
+              eq(entries.taskId, taskId),
+              and(
+                isNull(entries.taskId),
+                eq(entries.projectId, projectId),
+                eq(entries.title, title!),
+              ),
+            ),
+          )
         : and(
             eq(entries.date, date),
             isNull(entries.taskId),
