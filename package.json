@@ -11,7 +11,8 @@
     "start": "tsx src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "proto:timesheet": "node prototype/timesheet-server.mjs"
   },
   "dependencies": {
     "@js-temporal/polyfill": "^0.5.1",
