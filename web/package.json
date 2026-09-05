@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@codex-worktime/timesheet-core": "^0.1.0",
     "@codex-worktime/timesheet-server": "*",
     "@heroui/react": "^3.2.4",
     "@heroui/styles": "^3.2.4",
