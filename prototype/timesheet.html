@@ -36,7 +36,11 @@
     font-size: 11px; color: var(--amber); background: var(--amber-soft);
     border-radius: 999px; padding: 2px 8px; font-weight: 600;
   }
-  .actions { display: flex; gap: 8px; }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .header-total {
+    font-size: 13px; font-weight: 600; color: var(--accent); background: var(--accent-soft);
+    border-radius: 999px; padding: 4px 12px; margin-right: 4px; white-space: nowrap;
+  }
   button {
     font: inherit; border: 1px solid var(--border); background: var(--card);
     border-radius: 8px; padding: 5px 12px; cursor: pointer; color: var(--text);
@@ -134,8 +138,13 @@
   .cal .day.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }
   .cal .day.is-today .daynum { color: var(--accent); font-weight: 700; }
   .cal .daynum { font-size: 12px; color: var(--muted); }
-  .cal .daytotal { font-size: 16px; font-weight: 700; margin-top: 2px; }
-  .cal .stack { display: flex; height: 6px; border-radius: 999px; overflow: hidden; margin-top: 6px; background: var(--bg); }
+  .cal .dayhead { display: flex; justify-content: space-between; align-items: baseline; gap: 4px; }
+  .cal .daytotal { font-size: 13px; font-weight: 700; }
+  .cal-entry { display: flex; align-items: center; gap: 4px; font-size: 11px; margin-top: 3px; min-width: 0; }
+  .cal-entry .dot { flex-shrink: 0; }
+  .cal-entry-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cal-entry-hrs { color: var(--muted); flex-shrink: 0; }
+  .cal-more { font-size: 10px; color: var(--muted); margin-top: 2px; }
   .cal .weekend { background: #fbfbfc; }
   .monthstats { display: flex; gap: 16px; margin-top: 12px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
   .monthstats b { color: var(--text); }
@@ -168,6 +177,7 @@
     <span class="proto-badge">PROTOTYPE · 原型</span>
   </div>
   <div class="actions">
+    <span id="header-total" class="header-total" title="全部项目、全部日期的累计工时"></span>
     <button id="btn-export-csv">导出 CSV</button>
     <button id="btn-export-json">导出 JSON</button>
     <button id="btn-manage">项目 ⚙</button>
@@ -234,9 +244,6 @@ function projectById(id) { return state.projects.find((p) => p.id === id) ?? nul
 function projectName(id) { const p = projectById(id); return p ? p.name : "(已删除项目)"; }
 function entriesOn(date) { return state.entries.filter((e) => e.date === date); }
 function minutesOn(date) { return entriesOn(date).reduce((s, e) => s + e.minutes, 0); }
-function minutesFor(projectId, date) {
-  return state.entries.filter((e) => e.date === date && e.projectId === projectId).reduce((s, e) => s + e.minutes, 0);
-}
 function entriesInRange(from, to) { return state.entries.filter((e) => e.date >= from && e.date <= to); }
 function minutesInRange(from, to) { return entriesInRange(from, to).reduce((s, e) => s + e.minutes, 0); }
 function hasEntriesFor(projectId) { return state.entries.some((e) => e.projectId === projectId); }
@@ -270,6 +277,8 @@ function mutate(fn) { fn(state); persist(); render(); }
 
 // ---------- 渲染入口 ----------
 function render() {
+  const totalMinutes = state.entries.reduce((s, e) => s + e.minutes, 0);
+  document.getElementById("header-total").textContent = `总工时 ${fmtHours(totalMinutes)}`;
   renderProjectbar();
   renderSummary();
   renderView();
@@ -607,15 +616,19 @@ function renderMonth(view) {
     if (!sameMonth(d, monthAnchor)) return `<div class="day" style="visibility:hidden"></div>`;
     const dayEntries = entriesOn(d);
     const total = minutesOn(d);
-    const stack = total ? `<div class="stack">${projects.map((p) => {
-      const pm = minutesFor(p.id, d);
-      return pm ? `<div style="flex:${pm};background:${projectColor(p.id)}" title="${esc(p.name)} ${fmtHours(pm)}"></div>` : "";
-    }).join("")}</div>` : "";
-    const tip = dayEntries.length ? esc(dayEntries.map(describeEntry).join("\n")) : "";
-    return `<div class="day ${isWeekend(d) ? "weekend" : ""} ${d === t ? "is-today" : ""} ${d === selectedDay ? "selected" : ""}" data-date="${d}" title="${tip}">
-      <div class="daynum">${parseInt(d.slice(8), 10)}日</div>
-      <div class="daytotal">${total ? fmtHours(total) : ""}</div>
-      ${stack}
+    const lines = dayEntries.slice(0, 4).map((e) => `
+      <div class="cal-entry" title="${esc(describeEntry(e))}">
+        <span class="dot" style="background:${projectColor(e.projectId)}"></span>
+        <span class="cal-entry-title">${esc(e.title ?? "(未填标题)")}</span>
+        <span class="cal-entry-hrs">${fmtHours(e.minutes)}</span>
+      </div>`).join("");
+    const more = dayEntries.length > 4 ? `<div class="cal-more">还有 ${dayEntries.length - 4} 条…</div>` : "";
+    return `<div class="day ${isWeekend(d) ? "weekend" : ""} ${d === t ? "is-today" : ""} ${d === selectedDay ? "selected" : ""}" data-date="${d}">
+      <div class="dayhead">
+        <span class="daynum">${parseInt(d.slice(8), 10)}日</span>
+        ${total ? `<span class="daytotal">${fmtHours(total)}</span>` : ""}
+      </div>
+      ${lines}${more}
     </div>`;
   }).join("");
 
