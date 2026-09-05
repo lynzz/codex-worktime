@@ -16,6 +16,20 @@ export function manualServerEntry(): string {
   return serverEntry;
 }
 
+// 便捷:未显式注入连接串时,尝试加载仓库根 .env.local(neon link 写入)
+function loadRepoEnvOnce() {
+  if (process.env.DATABASE_URL) return;
+  const envFile = path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    "../../../../.env.local",
+  );
+  try {
+    process.loadEnvFile(envFile);
+  } catch {
+    // 无 .env.local 时保持现状,由 web 端给出 not-configured 指引
+  }
+}
+
 export function startManualServer(options: {
   port: number;
   stdout?: Pick<NodeJS.WriteStream, "write">;
@@ -25,6 +39,7 @@ export function startManualServer(options: {
       "web 构建产物不存在:先在仓库根执行 npm run build -w @codex-worktime/web",
     );
   }
+  loadRepoEnvOnce();
   const child = spawn(process.execPath, [serverEntry], {
     stdio: "inherit",
     env: { ...process.env, PORT: String(options.port) },
