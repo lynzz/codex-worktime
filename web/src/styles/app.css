@@ -23,7 +23,7 @@
 }
 
 body {
-  background-color: var(--muted); /* zinc-100,同 shadcn 灰底白卡 */
+  background-color: var(--background); /* 白底 */
   color: var(--foreground);
 }
 
