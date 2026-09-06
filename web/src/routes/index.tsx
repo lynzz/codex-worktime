@@ -189,7 +189,6 @@ function AppShell() {
             <DayList
               date={date}
               projects={projects}
-              tasks={tasks}
               entries={entries}
               onDateChange={(d) => setSearch({ date: d })}
               onChanged={refresh}

@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Button, Chip, Input, Spinner } from "@heroui/react";
 import {
-  CATEGORIES,
   addDays,
   dayOfWeekCN,
   formatHours,
@@ -9,35 +8,25 @@ import {
   todayKey,
   type Entry,
   type Project,
-  type Task,
 } from "@codex-worktime/timesheet-core";
 import { api } from "~/lib/api";
 import { projectColor } from "~/lib/colors";
-import { HeroSelect } from "~/components/HeroSelect";
 
 export function DayList({
   date,
   projects,
-  tasks,
   entries,
   onDateChange,
   onChanged,
 }: {
   date: string;
   projects: Project[];
-  tasks: Task[];
   entries: Entry[];
   onDateChange: (date: string) => void;
   onChanged: () => void;
 }) {
   const active = projects.filter((p) => !p.archived);
-  const [projectId, setProjectId] = useState(active[0]?.id ?? "");
-  const [title, setTitle] = useState("");
-  const [duration, setDuration] = useState("");
-  const [category, setCategory] = useState<string>("开发");
-  const [note, setNote] = useState("");
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
 
   const dayEntries = useMemo(
     () =>
@@ -56,33 +45,6 @@ export function DayList({
       onChanged();
     } catch (e) {
       setError((e as Error).message);
-    }
-  }
-
-  async function add() {
-    const minutes = parseDurationInput(duration);
-    if (!title.trim()) return setError("请填写任务标题");
-    if (minutes === null || Number.isNaN(minutes) || minutes <= 0)
-      return setError("请填写时长(支持 1.5 / 1:30 / 90m / 1h30)");
-    setBusy(true);
-    try {
-      await run(async () => {
-        await api.createEntry({
-          date,
-          projectId,
-          title,
-          minutes,
-          category: CATEGORIES.includes(category as never)
-            ? (category as (typeof CATEGORIES)[number])
-            : undefined,
-          note: note.trim() || undefined,
-        });
-        setTitle("");
-        setDuration("");
-        setNote("");
-      });
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -112,66 +74,6 @@ export function DayList({
         </span>
       </div>
 
-      <div className="flex flex-wrap items-end gap-2">
-        <HeroSelect
-          ariaLabel="项目"
-          className="w-40"
-          items={active.map((p) => ({ id: p.id, name: p.name }))}
-          selectedKey={projectId}
-          onSelectionChange={setProjectId}
-        />
-        <Input
-          placeholder="任务标题,如:登录页联调"
-          className="w-52"
-          list="task-options"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              void add();
-            }
-          }}
-        />
-        <datalist id="task-options">
-          {tasks
-            .filter((t) => t.projectId === projectId)
-            .map((t) => (
-              <option key={t.id} value={t.title}>
-                {projects.find((p) => p.id === t.projectId)?.name}
-              </option>
-            ))}
-        </datalist>
-        <Input
-          placeholder="时长:1.5 / 1:30 / 90m"
-          className="w-36"
-          value={duration}
-          onChange={(e) => setDuration(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              void add();
-            }
-          }}
-        />
-        <HeroSelect
-          ariaLabel="类别"
-          className="w-28"
-          items={CATEGORIES.map((c) => ({ id: c, name: c }))}
-          selectedKey={category}
-          onSelectionChange={setCategory}
-        />
-        <Input
-          placeholder="备注(可选)"
-          className="w-40"
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-        <Button size="sm" variant="primary" isDisabled={busy} onPress={() => void add()}>
-          {busy ? <Spinner size="sm" /> : "添加"}
-        </Button>
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
 
       <table
         aria-label="当日条目"
