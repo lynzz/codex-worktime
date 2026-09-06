@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { FileUp } from "lucide-react";
 import { Button, DatePicker, Spinner } from "~/components/ui";
 import { todayKey } from "@codex-worktime/timesheet-core";
 
@@ -17,6 +18,7 @@ export function ImportForm({ onChanged }: { onChanged: () => void }) {
   const [result, setResult] = useState<string[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const isExcel = file?.name.toLowerCase().endsWith(".xlsx") ?? false;
@@ -108,23 +110,46 @@ export function ImportForm({ onChanged }: { onChanged: () => void }) {
                   if (f) void pick(f);
                 }}
               />
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onPress={() => inputRef.current?.click()}
-                >
-                  选择文件…
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onPress={() => {
-                    window.location.href = "/api/import/template";
-                  }}
-                >
-                  下载模板
-                </Button>
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  const f = e.dataTransfer.files?.[0];
+                  if (f) void pick(f);
+                }}
+                className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 transition-colors ${
+                  dragging
+                    ? "border-blue-400 bg-blue-50"
+                    : "border-gray-200 bg-gray-50/50 hover:border-gray-300"
+                }`}
+              >
+                <FileUp className={`h-5 w-5 ${dragging ? "text-blue-500" : "text-gray-300"}`} />
+                <p className="text-sm text-gray-500">
+                  {dragging ? "松开即可导入" : "拖拽 JSON / XLSX 文件到此处"}
+                </p>
+                <div className="mt-1 flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => inputRef.current?.click()}
+                  >
+                    选择文件…
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onPress={() => {
+                      window.location.href = "/api/import/template";
+                    }}
+                  >
+                    下载模板
+                  </Button>
+                </div>
               </div>
 
               {file && <p className="mt-2 text-sm text-gray-500">{file.name}</p>}
