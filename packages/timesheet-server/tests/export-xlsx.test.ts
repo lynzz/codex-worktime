@@ -95,8 +95,9 @@ describe.skipIf(!hasTestDb)("GET /api/export/xlsx(模板导出,集成)", () => {
     expect(ws).toBeDefined();
 
     expect(ws!.getRow(1).getCell(1).value).toBe("序号");
-    expect(ws!.getRow(1).getCell(7).value).toBe("人力成本(元)");
-    expect(ws!.getRow(1).getCell(6).value).toBe("评估工时(人时)");
+    expect(ws!.getRow(1).getCell(4).value).toBe("日期");
+    expect(ws!.getRow(1).getCell(8).value).toBe("人力成本(元)");
+    expect(ws!.getRow(1).getCell(7).value).toBe("评估工时(人时)");
 
     // 聚合行:两行任务,5 小时那条在前?按拼音排序,以实际顺序断言内容集合
     const row2 = ws!.getRow(2).values as unknown[];
@@ -105,8 +106,8 @@ describe.skipIf(!hasTestDb)("GET /api/export/xlsx(模板导出,集成)", () => {
     expect(titles).toContain("生成证书联调");
     expect(titles).toContain("微生物字典 UI 调试");
     const certRow = titles.indexOf("生成证书联调") === 0 ? row2 : row3;
-    expect(certRow[6]).toBe(5); // 300 分钟 = 5 人时
-    expect((certRow[7] as { formula?: string }).formula ?? certRow[7]).toContain("150");
+    expect(certRow[7]).toBe(5); // 300 分钟 = 5 人时
+    expect((certRow[8] as { formula?: string }).formula ?? certRow[8]).toContain("150");
 
     // 汇总公式
     const formulas: string[] = [];

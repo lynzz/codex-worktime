@@ -177,7 +177,7 @@ export function ImportDialog({
               {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
               <p className="mt-2 text-xs text-gray-400">
                 支持 JSON(原型数据 / 本应用导出,按 id 幂等)与 任务清单模板
-                XLSX(按 项目+任务 建档,工时记到所选日期;重复导入同数值会跳过)
+                XLSX(按 项目+任务 建档;行内日期列填了用行内日期,留空记到所选日期;重复导入同数值会跳过)
               </p>
             </Modal.Body>
             <Modal.Footer>

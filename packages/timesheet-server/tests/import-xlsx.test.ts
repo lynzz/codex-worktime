@@ -103,6 +103,46 @@ describe.skipIf(!hasTestDb)("POST /api/import/xlsx(模板导出→导回闭环)"
     );
   });
 
+  it("行内日期优先,留空用默认日期;非法日期 400", async () => {
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("任务清单");
+    ws.addRow(["序号", "项目", "任务", "日期", "优先级", "备注", "评估工时(人时)", "人力成本(元)"]);
+    ws.addRow([1, "EQA", "行内日期任务", "2026-09-08", "P1", "", 2, undefined]);
+    ws.addRow([2, "EQA", "默认日期任务", "", "P1", "", 1, undefined]);
+    ws.addRow([3, "EQA", "斜杠日期任务", "2026/9/9", "P1", "", 1, undefined]);
+    const buffer = await wb.xlsx.writeBuffer();
+
+    const res = await api.request("/api/import/xlsx?date=2026-09-10", {
+      method: "POST",
+      headers: {
+        "content-type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+      body: buffer,
+    });
+    expect(res.status).toBe(201);
+    const rows = await getDb().select().from(entries);
+    const byTitle = Object.fromEntries(rows.map((r) => [r.title, r.date]));
+    expect(byTitle["行内日期任务"]).toBe("2026-09-08");
+    expect(byTitle["默认日期任务"]).toBe("2026-09-10");
+    expect(byTitle["斜杠日期任务"]).toBe("2026-09-09");
+
+    const bad = wb.getWorksheet("任务清单")!;
+    bad.getCell("D3").value = "明天";
+    const badBuffer = await wb.xlsx.writeBuffer();
+    const badRes = await api.request("/api/import/xlsx?date=2026-09-10", {
+      method: "POST",
+      headers: {
+        "content-type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+      body: badBuffer,
+    });
+    expect(badRes.status).toBe(400);
+    expect(((await badRes.json()) as { error: string }).error).toContain("日期格式");
+  });
+
   it("非模板文件/坏参数 → 400 中文报错", async () => {
     const noFile = await api.request("/api/import/xlsx", {
       method: "POST",

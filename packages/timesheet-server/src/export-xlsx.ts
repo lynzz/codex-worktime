@@ -8,6 +8,7 @@ const HEADERS = [
   "序号",
   "项目",
   "任务",
+  "日期",
   "优先级",
   "备注",
   "评估工时(人时)",
@@ -70,6 +71,7 @@ export async function buildTaskListWorkbook(
     { width: 8 },
     { width: 14 },
     { width: 24 },
+    { width: 12 },
     { width: 10 },
     { width: 58 },
     { width: 16 },
@@ -93,10 +95,11 @@ export async function buildTaskListWorkbook(
       i + 1,
       row.projectName,
       row.title,
+      "",
       "P1",
       row.note,
       Math.round((row.minutes / 60) * 100) / 100,
-      { formula: `F${r}*${RATE_PER_HOUR}` },
+      { formula: `G${r}*${RATE_PER_HOUR}` },
     ]);
     dataRow.height = 24;
     dataRow.eachCell((cell) => {
@@ -111,11 +114,11 @@ export async function buildTaskListWorkbook(
 
   ws.addRow([]); // 空一行
   const sumRow = (label: string, criteria: string) => {
-    const row = ws.addRow([undefined, undefined, undefined, label, undefined, undefined, undefined]);
+    const row = ws.addRow([undefined, undefined, undefined, undefined, label, undefined, undefined, undefined]);
     row.height = 23;
-    row.getCell(5).value = { formula: `COUNTIF(D${first}:D${last},"${criteria}")&"个任务"` };
-    row.getCell(6).value = { formula: `SUMIF(D${first}:D${last},"${criteria}",F${first}:F${last})` };
-    row.getCell(7).value = { formula: `SUMIF(D${first}:D${last},"${criteria}",G${first}:G${last})` };
+    row.getCell(5).value = { formula: `COUNTIF(E${first}:E${last},"${criteria}")&"个任务"` };
+    row.getCell(6).value = { formula: `SUMIF(E${first}:E${last},"${criteria}",G${first}:G${last})` };
+    row.getCell(7).value = { formula: `SUMIF(E${first}:E${last},"${criteria}",H${first}:H${last})` };
     for (const idx of [4, 5, 6, 7]) {
       const cell = row.getCell(idx);
       cell.font = { name: FONT, size: 11, color: { argb: "FF1F2937" } };
@@ -126,11 +129,11 @@ export async function buildTaskListWorkbook(
   const p0Row = sumRow("P0 设计", "P0");
   const p1Row = sumRow("P1 高优", "P1");
 
-  const totalRow = ws.addRow([undefined, undefined, undefined, "合计", undefined, undefined, undefined]);
+  const totalRow = ws.addRow([undefined, undefined, undefined, undefined, "合计", undefined, undefined, undefined]);
   totalRow.height = 23;
   totalRow.getCell(5).value = { formula: `SUM(E${p0Row.number}:E${p1Row.number})` };
-  totalRow.getCell(6).value = { formula: `SUM(F${p0Row.number}:F${p1Row.number})` };
-  totalRow.getCell(7).value = { formula: `SUM(G${p0Row.number}:G${p1Row.number})` };
+  totalRow.getCell(6).value = { formula: `SUM(G${p0Row.number}:G${p1Row.number})` };
+  totalRow.getCell(7).value = { formula: `SUM(H${p0Row.number}:H${p1Row.number})` };
   for (const idx of [4, 5, 6, 7]) {
     const cell = totalRow.getCell(idx);
     cell.font = { name: FONT, size: 11, bold: true, color: { argb: "FF1F2937" } };
@@ -139,9 +142,9 @@ export async function buildTaskListWorkbook(
 
   // 说明行(与模板一致,合并 B..G)
   ws.addRow([]); // 空一行
-  const noteRow = ws.addRow([undefined, `说明：成本按1200元/人天。红≥4h，黄=3h，蓝=2h，绿≤1.5h。`, undefined, undefined, undefined, undefined, undefined]);
+  const noteRow = ws.addRow([undefined, `说明：成本按1200元/人天。红≥4h，黄=3h，蓝=2h，绿≤1.5h。日期列留空时,导入记到所选默认日期。`, undefined, undefined, undefined, undefined, undefined, undefined]);
   noteRow.height = 24;
-  ws.mergeCells(`B${noteRow.number}:G${noteRow.number}`);
+  ws.mergeCells(`B${noteRow.number}:H${noteRow.number}`);
   const noteCell = noteRow.getCell(2);
   noteCell.font = { name: FONT, size: 11, color: { argb: "FF1F2937" } };
   noteCell.alignment = { vertical: "middle" };

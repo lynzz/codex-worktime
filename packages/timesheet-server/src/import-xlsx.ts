@@ -14,7 +14,7 @@ export type TaskListImportResult = {
   entries: { inserted: number; skipped: number };
 };
 
-const EXPECTED_HEADERS = ["项目", "任务", "备注", "评估工时(人时)"] as const;
+const EXPECTED_HEADERS = ["项目", "任务", "评估工时(人时)"] as const;
 
 export async function importTaskListWorkbook(
   data: ArrayBuffer | Uint8Array | Buffer,
@@ -36,8 +36,23 @@ export async function importTaskListWorkbook(
     if (!colOf[h]) throw new Error(`缺少列「${h}」:不是任务清单模板文件`);
   }
 
-  type Row = { projectName: string; title: string; note: string; minutes: number };
+  type Row = { projectName: string; title: string; note: string; minutes: number; date: string };
   const rows: Row[] = [];
+
+  function normalizeDate(value: unknown, rowNumber: number): string | null {
+    if (value == null || String(value).trim() === "") return null; // 用默认日期
+    if (value instanceof Date) {
+      const y = value.getFullYear();
+      const m = String(value.getMonth() + 1).padStart(2, "0");
+      const d = String(value.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+    const text = String(value).trim().replaceAll("/", "-");
+    const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
+    if (!m) throw new Error(`第 ${rowNumber} 行日期格式应为 YYYY-MM-DD`);
+    return `${m[1]}-${String(Number(m[2])).padStart(2, "0")}-${String(Number(m[3])).padStart(2, "0")}`;
+  }
+
   ws.eachRow((row, number) => {
     if (number === 1) return;
     const projectName = String(row.getCell(colOf["项目"]!).value ?? "").trim();
@@ -52,8 +67,13 @@ export async function importTaskListWorkbook(
           : NaN;
     const minutes = Math.round(hours * 60);
     if (!Number.isFinite(minutes) || minutes <= 0) return;
-    const note = String(row.getCell(colOf["备注"]!).value ?? "").trim();
-    rows.push({ projectName, title, note, minutes });
+    const note = colOf["备注"]
+      ? String(row.getCell(colOf["备注"]!).value ?? "").trim()
+      : "";
+    const rowDate = colOf["日期"]
+      ? normalizeDate(row.getCell(colOf["日期"]!).value, number)
+      : null;
+    rows.push({ projectName, title, note, minutes, date: rowDate ?? targetDate });
   });
   if (rows.length === 0) throw new Error("表格里没有可导入的任务行");
 
@@ -102,7 +122,7 @@ export async function importTaskListWorkbook(
         .from(entries)
         .where(
           and(
-            eq(entries.date, targetDate),
+            eq(entries.date, row.date),
             eq(entries.projectId, project.id),
             eq(entries.title, row.title),
             eq(entries.minutes, row.minutes),
@@ -116,7 +136,7 @@ export async function importTaskListWorkbook(
 
     await db.insert(entries).values({
       id: crypto.randomUUID(),
-      date: targetDate,
+      date: row.date,
       projectId: project.id,
       title: row.title,
       minutes: row.minutes,
