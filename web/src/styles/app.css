@@ -1,7 +1,39 @@
 @import "tailwindcss";
-@import "@heroui/styles";
 
-/* 与 heroui.com 官方文档一致:zinc-100 页面底色 + 白色内容卡片 */
-body {
-  background-color: hsl(240 5% 96%);
+/* shadcn 风格基础令牌(zinc 中性色 + 蓝色主色) */
+:root {
+  --background: hsl(0 0% 100%);
+  --foreground: oklch(0.21 0.006 285.89);
+  --muted: hsl(240 5% 96%);
+  --muted-foreground: oklch(0.552 0.016 285.94);
+  --border: hsl(240 5.9 90%);
+  --primary: oklch(0.55 0.2 262);
+  --primary-foreground: oklch(0.98 0 0);
+  --ring: oklch(0.55 0.2 262 / 15%);
 }
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+}
+
+body {
+  background-color: var(--muted); /* zinc-100,同 shadcn 灰底白卡 */
+  color: var(--foreground);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes zoom-in {
+  from { opacity: 0; transform: scale(0.97) translateY(4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.14s ease-out; }
+.animate-zoom-in { animation: zoom-in 0.16s ease-out; }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Button, Chip, Input, Modal, Spinner } from "@heroui/react";
+import { Button, Chip, Input, Modal, Spinner } from "~/components/ui";
 import {
   dayOfWeekCN,
   formatHours,

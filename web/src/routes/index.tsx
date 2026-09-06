@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { createServerFn } from "@tanstack/react-start";
-import { Button, Card, Chip, Tabs } from "@heroui/react";
+import { Button, Card, Chip, Tabs } from "~/components/ui";
 import { z } from "zod";
 import {
   addDays,

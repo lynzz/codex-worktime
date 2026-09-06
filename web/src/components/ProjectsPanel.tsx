@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Button, Input, Modal } from "@heroui/react";
+import { Button, Input, Modal } from "~/components/ui";
 import type { Project, Task } from "@codex-worktime/timesheet-core";
 import { api } from "~/lib/api";
+import { HeroSelect } from "~/components/HeroSelect";
 import { projectColor } from "~/lib/colors";
 
 export function ProjectsPanel({
@@ -177,18 +178,13 @@ function TaskRowsSection({
     <div className="mt-5 border-t border-gray-100 pt-3">
       <p className="text-sm font-semibold">任务行(周网格常驻行)</p>
       <div className="mt-2 flex flex-wrap gap-2">
-        <select
-          className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-sm"
-          value={projectId}
-          onChange={(e) => setProjectId(e.target.value)}
-          aria-label="任务行项目"
-        >
-          {actives.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+        <HeroSelect
+          ariaLabel="任务行项目"
+          className="w-36"
+          items={actives.map((p) => ({ id: p.id, name: p.name }))}
+          selectedKey={projectId}
+          onSelectionChange={setProjectId}
+        />
         <Input
           placeholder="任务标题,如:登录页联调"
           className="w-48"

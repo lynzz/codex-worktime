@@ -9,14 +9,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@base-ui-components/react": "^1.0.0-rc.0",
     "@codex-worktime/timesheet-core": "^0.1.0",
     "@codex-worktime/timesheet-server": "*",
-    "@heroui/react": "^3.2.4",
-    "@heroui/styles": "^3.2.4",
     "@tanstack/react-router": "^1.170.32",
     "@tanstack/react-start": "^1.168.49",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.41.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

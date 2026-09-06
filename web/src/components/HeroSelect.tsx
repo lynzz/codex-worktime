@@ -1,4 +1,4 @@
-import { ListBox, ListBoxItem, Select } from "@heroui/react";
+import { ListBox, ListBoxItem, Select } from "~/components/ui";
 
 // HeroUI 复合 Select 的常用形态:单选、字符串 key
 export function HeroSelect({
@@ -20,6 +20,7 @@ export function HeroSelect({
       className={className}
       selectedKey={selectedKey}
       onSelectionChange={(key) => key != null && onSelectionChange(String(key))}
+      items={items.map((i) => ({ value: i.id, label: i.name }))}
     >
       <Select.Trigger>
         <Select.Value />
