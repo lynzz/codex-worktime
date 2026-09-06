@@ -8,3 +8,4 @@ export { Tabs } from "./tabs";
 export { Card } from "./card";
 export { Spinner } from "./spinner";
 export { Tooltip } from "./tooltip";
+export { DatePicker } from "./date-picker";

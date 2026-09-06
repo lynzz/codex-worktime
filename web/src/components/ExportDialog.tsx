@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Input, Modal, Tabs } from "~/components/ui";
+import { Button, DatePicker, Input, Modal, Tabs } from "~/components/ui";
 import { monthStart, nextMonthFirst, todayKey } from "@codex-worktime/timesheet-core";
 
 // 导出范围:本月 / 按月份 / 自定义区间
@@ -85,21 +85,9 @@ export function ExportDialog({
                 </div>
               ) : (
                 <div className="mt-3 flex items-center gap-2">
-                  <Input
-                    type="date"
-                    aria-label="开始日期"
-                    className="w-40"
-                    value={from}
-                    onChange={(e) => setFrom(e.target.value)}
-                  />
+                  <DatePicker ariaLabel="开始日期" value={from} onChange={setFrom} />
                   <span className="text-sm text-gray-400">至</span>
-                  <Input
-                    type="date"
-                    aria-label="结束日期"
-                    className="w-40"
-                    value={to}
-                    onChange={(e) => setTo(e.target.value)}
-                  />
+                  <DatePicker ariaLabel="结束日期" value={to} onChange={setTo} />
                 </div>
               )}
               {error && <p className="mt-1 text-sm text-red-600">{error}</p>}

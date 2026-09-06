@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Input, Spinner, TextArea } from "~/components/ui";
+import { Button, DatePicker, Input, Spinner, TextArea } from "~/components/ui";
 import {
   parseDurationInput,
   todayKey,
@@ -89,12 +89,10 @@ export function QuickEntry({
             }
           }}
         />
-        <Input
-          type="date"
-          aria-label="记录日期"
-          className="w-36"
+        <DatePicker
+          ariaLabel="记录日期"
           value={targetDate}
-          onChange={(e) => setTargetDate(e.target.value)}
+          onChange={setTargetDate}
         />
         {targetDate !== todayKey() && (
           <Button

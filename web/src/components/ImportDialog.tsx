@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Button, Input, Modal, Spinner } from "~/components/ui";
+import { Button, DatePicker, Modal, Spinner } from "~/components/ui";
 import { todayKey } from "@codex-worktime/timesheet-core";
 
 type Count = { inserted?: number; skipped?: number; created?: number; existing?: number };
@@ -152,12 +152,10 @@ export function ImportDialog({
               {isExcel && (
                 <div className="mt-2 flex items-center gap-2">
                   <span className="text-sm text-gray-500">工时记到</span>
-                  <Input
-                    type="date"
-                    aria-label="目标日期"
-                    className="w-40"
+                  <DatePicker
+                    ariaLabel="目标日期"
                     value={targetDate}
-                    onChange={(e) => setTargetDate(e.target.value)}
+                    onChange={setTargetDate}
                   />
                 </div>
               )}

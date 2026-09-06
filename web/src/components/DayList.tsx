@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Button, Chip, Input, Spinner } from "~/components/ui";
+import { Button, Chip, Input, Spinner, DatePicker } from "~/components/ui";
 import {
   addDays,
   dayOfWeekCN,
@@ -54,13 +54,7 @@ export function DayList({
         <Button size="sm" variant="ghost" onPress={() => onDateChange(addDays(date, -1))}>
           ← 前一天
         </Button>
-        <Input
-          type="date"
-          aria-label="日期"
-          className="w-40"
-          value={date}
-          onChange={(e) => e.target.value && onDateChange(e.target.value)}
-        />
+        <DatePicker ariaLabel="日期" value={date} onChange={onDateChange} />
         <Button size="sm" variant="ghost" onPress={() => onDateChange(addDays(date, 1))}>
           后一天 →
         </Button>
