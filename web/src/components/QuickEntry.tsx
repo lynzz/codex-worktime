@@ -15,7 +15,6 @@ export function QuickEntry({
   tasks,
   onChanged,
 }: {
-  date: string;
   projects: Project[];
   tasks: Task[];
   onChanged: () => void;

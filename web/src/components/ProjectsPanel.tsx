@@ -16,23 +16,19 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Button, Input, Modal } from "~/components/ui";
+import { Button, Input } from "~/components/ui";
 import type { Project, Task } from "@codex-worktime/timesheet-core";
 import { api } from "~/lib/api";
 import { HeroSelect } from "~/components/HeroSelect";
 import { projectColor } from "~/lib/colors";
 
-export function ProjectsPanel({
+export function ProjectsContent({
   projects,
   tasks,
-  isOpen,
-  onClose,
   onChanged,
 }: {
   projects: Project[];
   tasks: Task[];
-  isOpen: boolean;
-  onClose: () => void;
   onChanged: () => void;
 }) {
   const [newName, setNewName] = useState("");
@@ -83,12 +79,7 @@ export function ProjectsPanel({
   );
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog>
-            <Modal.Header>项目与任务行</Modal.Header>
-            <Modal.Body>
+    <div className="flex flex-col gap-4">
               <div className="flex gap-2">
                 <Input
                   placeholder="新项目名"
@@ -158,16 +149,7 @@ export function ProjectsPanel({
                   清空
                 </Button>
               </div>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button size="sm" variant="ghost" onPress={onClose}>
-                关闭
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    </div>
   );
 }
 

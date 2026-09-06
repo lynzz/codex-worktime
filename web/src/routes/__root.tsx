@@ -4,7 +4,15 @@ import {
   Outlet,
   Scripts,
   createRootRoute,
+  useRouterState,
 } from "@tanstack/react-router";
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "~/components/ui/sidebar";
+import { AppSidebar } from "~/components/app-sidebar";
+import { TotalHoursChip, TotalHoursProvider } from "~/components/total-hours";
 import appCss from "~/styles/app.css?url";
 
 export const Route = createRootRoute({
@@ -27,14 +35,40 @@ export const Route = createRootRoute({
   component: RootComponent,
 });
 
+const TITLES: Record<string, string> = {
+  "/week": "周网格",
+  "/day": "日清单",
+  "/month": "月日历",
+  "/projects": "项目与任务行",
+  "/data": "导入导出",
+};
+
 function RootComponent() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
     <html lang="zh-CN">
       <head>
         <HeadContent />
       </head>
       <body>
-        <Outlet />
+        <TotalHoursProvider>
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset>
+            <header className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-gray-200 bg-white/80 px-4 backdrop-blur">
+              <SidebarTrigger />
+              <div className="h-4 w-px bg-gray-200" />
+              <h1 className="text-sm font-semibold">{TITLES[pathname] ?? "工时速记"}</h1>
+              <div className="ml-auto">
+                <TotalHoursChip />
+              </div>
+            </header>
+            <main className="flex-1 p-4 md:p-6">
+              <Outlet />
+            </main>
+          </SidebarInset>
+        </SidebarProvider>
+        </TotalHoursProvider>
         <Scripts />
       </body>
     </html>

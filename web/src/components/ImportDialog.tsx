@@ -1,19 +1,11 @@
 import { useRef, useState } from "react";
-import { Button, DatePicker, Modal, Spinner } from "~/components/ui";
+import { Button, DatePicker, Spinner } from "~/components/ui";
 import { todayKey } from "@codex-worktime/timesheet-core";
 
 type Count = { inserted?: number; skipped?: number; created?: number; existing?: number };
 
 // 导入:JSON(原型/本应用导出,按 id 幂等)或 任务清单模板 XLSX(导出→改→导回)
-export function ImportDialog({
-  isOpen,
-  onClose,
-  onChanged,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  onChanged: () => void;
-}) {
+export function ImportForm({ onChanged }: { onChanged: () => void }) {
   const [file, setFile] = useState<File | null>(null);
   const [jsonPayload, setJsonPayload] = useState("");
   const [preview, setPreview] = useState<{
@@ -105,20 +97,7 @@ export function ImportDialog({
   }
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onOpenChange={(open) => {
-        if (!open) {
-          reset();
-          onClose();
-        }
-      }}
-    >
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog>
-            <Modal.Header>导入</Modal.Header>
-            <Modal.Body>
+    <div className="flex flex-col gap-3">
               <input
                 ref={inputRef}
                 type="file"
@@ -177,30 +156,15 @@ export function ImportDialog({
                 支持 JSON(原型数据 / 本应用导出,按 id 幂等)与 任务清单模板
                 XLSX(按 项目+任务 建档;行内日期列填了用行内日期,留空记到所选日期;重复导入同数值会跳过)
               </p>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button
-                size="sm"
-                variant="ghost"
-                onPress={() => {
-                  reset();
-                  onClose();
-                }}
-              >
-                关闭
-              </Button>
-              <Button
-                size="sm"
-                variant="primary"
-                isDisabled={!file || busy}
-                onPress={() => void doImport()}
-              >
-                {busy ? <Spinner size="sm" /> : "导入"}
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+      <Button
+        size="sm"
+        variant="primary"
+        className="self-start"
+        isDisabled={!file || busy}
+        onPress={() => void doImport()}
+      >
+        {busy ? <Spinner size="sm" /> : "导入"}
+      </Button>
+    </div>
   );
 }

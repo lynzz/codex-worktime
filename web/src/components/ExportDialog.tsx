@@ -1,15 +1,9 @@
 import { useState } from "react";
-import { Button, DatePicker, Input, Modal, Tabs } from "~/components/ui";
+import { Button, DatePicker, Input, Tabs } from "~/components/ui";
 import { monthStart, nextMonthFirst, todayKey } from "@codex-worktime/timesheet-core";
 
 // 导出范围:本月 / 按月份 / 自定义区间
-export function ExportDialog({
-  isOpen,
-  onClose,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-}) {
+export function ExportForm() {
   const t = todayKey();
   const [mode, setMode] = useState<"month" | "range">("month");
   const [month, setMonth] = useState(t.slice(0, 7));
@@ -30,16 +24,10 @@ export function ExportDialog({
       return setError("请提供起止日期");
     }
     window.location.href = `/api/export/xlsx?${qs}`;
-    onClose();
   }
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog>
-            <Modal.Header>导出 XLSX(按模板)</Modal.Header>
-            <Modal.Body>
+    <div className="flex flex-col gap-3">
               <Tabs
                 aria-label="导出范围"
                 selectedKey={mode}
@@ -94,18 +82,9 @@ export function ExportDialog({
               <p className="mt-2 text-xs text-gray-400">
                 聚合口径:项目 + 任务;优先级默认 P1,导出后可在 Excel 中调整
               </p>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button size="sm" variant="ghost" onPress={onClose}>
-                取消
-              </Button>
-              <Button size="sm" variant="primary" onPress={download}>
-                导出
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+      <Button size="sm" variant="primary" className="self-start" onPress={download}>
+        导出 XLSX
+      </Button>
+    </div>
   );
 }
