@@ -9,9 +9,8 @@ import {
 import { api } from "~/lib/api";
 import { HeroSelect } from "~/components/HeroSelect";
 
-// 快速记录一行:项目 + 任务标题 + 时长,记到当前所选日期
+// 快速记录一行:项目 + 任务标题 + 时长;目标日期默认今天、可改
 export function QuickEntry({
-  date,
   projects,
   tasks,
   onChanged,
@@ -27,6 +26,7 @@ export function QuickEntry({
   const [duration, setDuration] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [targetDate, setTargetDate] = useState(todayKey());
 
   async function add() {
     const minutes = parseDurationInput(duration);
@@ -37,7 +37,7 @@ export function QuickEntry({
     setError("");
     try {
       await api.createEntry({
-        date: date || todayKey(),
+        date: targetDate || todayKey(),
         projectId,
         title,
         minutes,
@@ -97,7 +97,22 @@ export function QuickEntry({
       <Button size="sm" variant="primary" isDisabled={busy} onPress={() => void add()}>
         添加
       </Button>
-      <span className="text-xs text-gray-400">→ {date || todayKey()}</span>
+      <Input
+        type="date"
+        aria-label="记录日期"
+        className="w-36"
+        value={targetDate}
+        onChange={(e) => setTargetDate(e.target.value)}
+      />
+      {targetDate !== todayKey() && (
+        <Button
+          size="sm"
+          variant="tertiary"
+          onPress={() => setTargetDate(todayKey())}
+        >
+          今天
+        </Button>
+      )}
       {error && <span className="text-sm text-red-600">{error}</span>}
     </div>
   );
