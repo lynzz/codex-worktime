@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Button, Chip, Input } from "@heroui/react";
+import { Button, Chip, Input, Spinner } from "@heroui/react";
 import {
   CATEGORIES,
   addDays,
@@ -168,7 +168,7 @@ export function DayList({
           onChange={(e) => setNote(e.target.value)}
         />
         <Button size="sm" variant="primary" isDisabled={busy} onPress={() => void add()}>
-          添加
+          {busy ? <Spinner size="sm" /> : "添加"}
         </Button>
       </div>
       {error && <p className="text-sm text-red-600">{error}</p>}

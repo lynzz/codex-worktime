@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Input } from "@heroui/react";
+import { Button, Input, Spinner } from "@heroui/react";
 import {
   parseDurationInput,
   todayKey,
@@ -95,7 +95,7 @@ export function QuickEntry({
         }}
       />
       <Button size="sm" variant="primary" isDisabled={busy} onPress={() => void add()}>
-        添加
+        {busy ? <Spinner size="sm" /> : "添加"}
       </Button>
       <Input
         type="date"

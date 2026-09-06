@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Button, Input, Modal } from "@heroui/react";
+import { Button, Input, Modal, Spinner } from "@heroui/react";
 import { todayKey } from "@codex-worktime/timesheet-core";
 
 type Count = { inserted?: number; skipped?: number; created?: number; existing?: number };
@@ -197,7 +197,7 @@ export function ImportDialog({
                 isDisabled={!file || busy}
                 onPress={() => void doImport()}
               >
-                导入
+                {busy ? <Spinner size="sm" /> : "导入"}
               </Button>
             </Modal.Footer>
           </Modal.Dialog>

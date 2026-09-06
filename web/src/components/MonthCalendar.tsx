@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Button, Chip, Input, Modal } from "@heroui/react";
+import { Button, Chip, Input, Modal, Spinner } from "@heroui/react";
 import {
   dayOfWeekCN,
   formatHours,
@@ -249,7 +249,7 @@ function DayEntryModal({
                   }}
                 />
                 <Button size="sm" variant="primary" isDisabled={busy} onPress={() => void add()}>
-                  添加
+                  {busy ? <Spinner size="sm" /> : "添加"}
                 </Button>
               </div>
               {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
