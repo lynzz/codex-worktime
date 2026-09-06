@@ -129,13 +129,24 @@ export function ImportDialog({
                   if (f) void pick(f);
                 }}
               />
-              <Button
-                size="sm"
-                variant="secondary"
-                onPress={() => inputRef.current?.click()}
-              >
-                选择文件…
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onPress={() => inputRef.current?.click()}
+                >
+                  选择文件…
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onPress={() => {
+                    window.location.href = "/api/import/template";
+                  }}
+                >
+                  下载模板
+                </Button>
+              </div>
 
               {file && <p className="mt-2 text-sm text-gray-500">{file.name}</p>}
               {isExcel && (

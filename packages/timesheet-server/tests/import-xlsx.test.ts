@@ -84,6 +84,25 @@ describe.skipIf(!hasTestDb)("POST /api/import/xlsx(模板导出→导回闭环)"
     expect(counts2.entries.skipped).toBe(2);
   });
 
+  it("模板下载:空白任务清单可直接下载且可再导入", async () => {
+    const res = await api.request("/api/import/template");
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-disposition")).toContain("task-list-template.xlsx");
+    // 空模板导入报"没有可导入的任务行"(结构合法但无数据)
+    const imported = await api.request("/api/import/xlsx?date=2026-09-05", {
+      method: "POST",
+      headers: {
+        "content-type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+      body: await res.arrayBuffer(),
+    });
+    expect(imported.status).toBe(400);
+    expect(((await imported.json()) as { error: string }).error).toContain(
+      "没有可导入",
+    );
+  });
+
   it("非模板文件/坏参数 → 400 中文报错", async () => {
     const noFile = await api.request("/api/import/xlsx", {
       method: "POST",

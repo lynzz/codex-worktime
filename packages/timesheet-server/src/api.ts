@@ -11,6 +11,17 @@ import { entries as entriesTable, projects as projectsTable } from "./schema.js"
 
 export const api = new Hono();
 
+// 下载空白任务清单模板(与导出/导入同构)
+api.get("/api/import/template", async (c) => {
+  const buffer = await buildTaskListWorkbook([]);
+  c.header(
+    "content-disposition",
+    `attachment; filename="task-list-template.xlsx"; filename*=UTF-8''${encodeURIComponent("任务清单模板")}.xlsx`,
+  );
+  c.header("content-type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  return c.body(new Uint8Array(buffer));
+});
+
 // Excel 模板导入:?date=YYYY-MM-DD 指定条目目标日期(缺省今天)
 api.post("/api/import/xlsx", async (c) => {
   const date = c.req.query("date");
