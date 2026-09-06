@@ -8,6 +8,13 @@
       "when": 1788588933031,
       "tag": "0000_init-three-tables",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788683081412,
+      "tag": "0001_tasks-position",
+      "breakpoints": true
     }
   ]
 }

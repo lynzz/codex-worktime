@@ -78,6 +78,7 @@ export const taskSchema = z.object({
   id: z.string(),
   projectId: z.string(),
   title: z.string().min(1),
+  position: z.number().int().nullable(),
 });
 export type Task = z.infer<typeof taskSchema>;
 

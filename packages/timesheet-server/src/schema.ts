@@ -14,6 +14,8 @@ export const tasks = pgTable("tasks", {
     .notNull()
     .references(() => projects.id, { onDelete: "restrict" }),
   title: text("title").notNull(),
+  // 拖动排序;null 时按标题字母序排在有位置的行之后
+  position: integer("position"),
 });
 
 export const entries = pgTable("entries", {

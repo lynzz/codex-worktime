@@ -55,6 +55,11 @@ export const api = {
     }),
   deleteTask: (id: string) =>
     request<{ ok: boolean }>(`/api/tasks/${id}`, { method: "DELETE" }),
+  reorderTasks: (ids: string[]) =>
+    request<{ ok: boolean }>("/api/tasks/reorder", {
+      method: "POST",
+      body: JSON.stringify({ ids }),
+    }),
 
   resetManualData: () =>
     request<{ ok: boolean }>("/api/projects/reset", {

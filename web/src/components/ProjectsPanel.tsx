@@ -1,4 +1,21 @@
 import { useState } from "react";
+import { GripVertical } from "lucide-react";
+import {
+  DndContext,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button, Input, Modal } from "~/components/ui";
 import type { Project, Task } from "@codex-worktime/timesheet-core";
 import { api } from "~/lib/api";
@@ -207,36 +224,113 @@ function TaskRowsSection({
             还没有任务行;日清单里输入同名标题会自动关联
           </p>
         )}
-        {tasks.map((t) => (
-          <div key={t.id} className="flex items-center gap-2 text-sm">
-            <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ background: projectColor(t.projectId) }}
-            />
-            <span className="text-gray-500">
-              {actives.find((p) => p.id === t.projectId)?.name ?? "?"}
-            </span>
-            <Input
-              aria-label="任务行标题"
-              className="min-w-40 flex-1"
-              defaultValue={t.title}
-              onBlur={(e) => {
-                const title = e.target.value.trim();
-                if (title && title !== t.title) {
-                  void run(() => api.patchTask(t.id, { title }));
-                }
-              }}
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              onPress={() => run(() => api.deleteTask(t.id))}
-            >
-              删除
-            </Button>
-          </div>
-        ))}
+        <SortableTaskList
+          tasks={tasks}
+          actives={actives}
+          run={run}
+        />
       </div>
+    </div>
+  );
+}
+
+// 拖动排序(dnd-kit):拖左侧把手调整任务行顺序,落定即保存
+function SortableTaskList({
+  tasks,
+  actives,
+  run,
+}: {
+  tasks: Task[];
+  actives: Project[];
+  run: (action: () => Promise<unknown>) => Promise<void>;
+}) {
+  const [order, setOrder] = useState<Task[] | null>(null);
+  const items = order ?? tasks;
+
+  function onDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = items.findIndex((t) => t.id === active.id);
+    const newIndex = items.findIndex((t) => t.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove(items, oldIndex, newIndex);
+    setOrder(next); // 乐观更新
+    void run(async () => {
+      await api.reorderTasks(next.map((t) => t.id));
+      setOrder(null); // 以服务器数据为准
+    });
+  }
+
+  return (
+    <DndContext
+      sensors={useSensors(
+        useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+        useSensor(KeyboardSensor),
+      )}
+      modifiers={[restrictToVerticalAxis]}
+      onDragEnd={onDragEnd}
+    >
+      <SortableContext items={items.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+        {items.map((t) => (
+          <SortableTaskRow key={t.id} task={t} actives={actives} run={run} />
+        ))}
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+function SortableTaskRow({
+  task,
+  actives,
+  run,
+}: {
+  task: Task;
+  actives: Project[];
+  run: (action: () => Promise<unknown>) => Promise<void>;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={`flex items-center gap-2 rounded-lg px-1 py-0.5 text-sm ${isDragging ? "z-10 bg-blue-50/80 shadow-md" : "bg-transparent"}`}
+    >
+      <button
+        type="button"
+        className="cursor-grab touch-none text-gray-300 hover:text-gray-500 active:cursor-grabbing"
+        aria-label="拖动排序"
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-4 w-4" />
+      </button>
+      <span
+        className="h-2 w-2 shrink-0 rounded-full"
+        style={{ background: projectColor(task.projectId) }}
+      />
+      <span className="text-gray-500">
+        {actives.find((p) => p.id === task.projectId)?.name ?? "?"}
+      </span>
+      <Input
+        aria-label="任务行标题"
+        className="min-w-40 flex-1"
+        defaultValue={task.title}
+        onBlur={(e) => {
+          const title = e.target.value.trim();
+          if (title && title !== task.title) {
+            void run(() => api.patchTask(task.id, { title }));
+          }
+        }}
+      />
+      <Button
+        size="sm"
+        variant="ghost"
+        onPress={() => run(() => api.deleteTask(task.id))}
+      >
+        删除
+      </Button>
     </div>
   );
 }

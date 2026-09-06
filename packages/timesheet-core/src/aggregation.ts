@@ -19,7 +19,13 @@ export function buildWeekRows(
   for (const project of active) {
     tasks
       .filter((t) => t.projectId === project.id)
-      .sort((a, b) => a.title.localeCompare(b.title, "zh"))
+      .slice()
+      .sort(
+        (a, b) =>
+          (a.position ?? Number.MAX_SAFE_INTEGER) -
+            (b.position ?? Number.MAX_SAFE_INTEGER) ||
+          a.title.localeCompare(b.title, "zh"),
+      )
       .forEach((t) =>
         rows.push({ taskId: t.id, projectId: project.id, title: t.title, adhoc: false }),
       );
