@@ -54,7 +54,6 @@ export function QuickEntry({
 
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5">
-      <span className="text-xs text-gray-400">快速记录</span>
       <HeroSelect
         ariaLabel="快速记录项目"
         className="w-36"
