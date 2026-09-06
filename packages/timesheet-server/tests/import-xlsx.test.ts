@@ -143,6 +143,28 @@ describe.skipIf(!hasTestDb)("POST /api/import/xlsx(模板导出→导回闭环)"
     expect(((await badRes.json()) as { error: string }).error).toContain("日期格式");
   });
 
+  it("Excel 序列日期数字也能解析", async () => {
+    const ExcelJS = (await import("exceljs")).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("任务清单");
+    ws.addRow(["序号", "项目", "任务", "日期", "优先级", "备注", "评估工时(人时)", "人力成本(元)"]);
+    // 46271 = 2026-09-06 的 Excel 序列值
+    ws.addRow([1, "EQA", "序列日期任务", 46271, "P1", "", 1, undefined]);
+    const buffer = await wb.xlsx.writeBuffer();
+
+    const res = await api.request("/api/import/xlsx", {
+      method: "POST",
+      headers: {
+        "content-type":
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      },
+      body: buffer,
+    });
+    expect(res.status).toBe(201);
+    const rows = await getDb().select().from(entries);
+    expect(rows.find((r) => r.title === "序列日期任务")?.date).toBe("2026-09-06");
+  });
+
   it("非模板文件/坏参数 → 400 中文报错", async () => {
     const noFile = await api.request("/api/import/xlsx", {
       method: "POST",

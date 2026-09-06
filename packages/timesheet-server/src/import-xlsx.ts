@@ -41,6 +41,12 @@ export async function importTaskListWorkbook(
 
   function normalizeDate(value: unknown, rowNumber: number): string | null {
     if (value == null || String(value).trim() === "") return null; // 用默认日期
+    // Excel 序列日期(数字):距 1899-12-30 的天数
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const ms = Math.round((value - 25569) * 86400 * 1000); // 25569 = 1970-01-01 的序列值
+      const d = new Date(ms);
+      return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+    }
     if (value instanceof Date) {
       const y = value.getFullYear();
       const m = String(value.getMonth() + 1).padStart(2, "0");

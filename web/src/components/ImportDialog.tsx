@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { FileUp } from "lucide-react";
-import { Button, DatePicker, Spinner } from "~/components/ui";
+import { Button, Spinner } from "~/components/ui";
 import { todayKey } from "@codex-worktime/timesheet-core";
 
 type Count = { inserted?: number; skipped?: number; created?: number; existing?: number };
@@ -14,7 +14,6 @@ export function ImportForm({ onChanged }: { onChanged: () => void }) {
     tasks: number;
     entries: number;
   } | null>(null);
-  const [targetDate, setTargetDate] = useState(todayKey());
   const [result, setResult] = useState<string[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -57,7 +56,7 @@ export function ImportForm({ onChanged }: { onChanged: () => void }) {
       let res: Response;
       if (isExcel) {
         res = await fetch(
-          `/api/import/xlsx?date=${targetDate}`,
+          `/api/import/xlsx?date=${todayKey()}`,
           await file.arrayBuffer().then((buf) => ({
             method: "POST",
             headers: {
@@ -153,16 +152,7 @@ export function ImportForm({ onChanged }: { onChanged: () => void }) {
               </div>
 
               {file && <p className="mt-2 text-sm text-gray-500">{file.name}</p>}
-              {isExcel && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-sm text-gray-500">工时记到</span>
-                  <DatePicker
-                    ariaLabel="目标日期"
-                    value={targetDate}
-                    onChange={setTargetDate}
-                  />
-                </div>
-              )}
+        
               {preview && !result && (
                 <p className="mt-1 text-sm">
                   将导入:项目 {preview.projects}、任务行 {preview.tasks}、
@@ -179,7 +169,7 @@ export function ImportForm({ onChanged }: { onChanged: () => void }) {
               {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
               <p className="mt-2 text-xs text-gray-400">
                 支持 JSON(原型数据 / 本应用导出,按 id 幂等)与 任务清单模板
-                XLSX(按 项目+任务 建档;行内日期列填了用行内日期,留空记到所选日期;重复导入同数值会跳过)
+                XLSX(按 项目+任务 建档;工时按行内日期列落账,留空记到今天;重复导入同数值会跳过)
               </p>
       <Button
         size="sm"
