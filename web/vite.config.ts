@@ -8,9 +8,18 @@ import { fileURLToPath } from "node:url";
 
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Nitro 预设由部署目标决定:DEPLOY_TARGET=cloudflare → cloudflare_module,
+// 否则默认 node(manual serve 直接 node 启动,PORT 生效)
+const nitroPreset =
+  process.env.DEPLOY_TARGET === "cloudflare" ? "cloudflare_module" : undefined;
+
 export default defineConfig({
-  // nitro(node preset)让构建产物自带监听(manual serve 直接 node 启动,PORT 生效)
-  plugins: [tailwindcss(), tanstackStart(), nitro(), viteReact()],
+  plugins: [
+    tailwindcss(),
+    tanstackStart(),
+    nitro(nitroPreset ? { preset: nitroPreset } : undefined),
+    viteReact(),
+  ],
   resolve: {
     alias: {
       "~": path.resolve(dirname, "src"),

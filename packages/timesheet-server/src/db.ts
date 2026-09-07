@@ -1,26 +1,57 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { Pool } from "pg";
-import { drizzle } from "drizzle-orm/node-postgres";
+import { neon, neonConfig } from "@neondatabase/serverless";
+import { drizzle } from "drizzle-orm/neon-http";
 
-// 常驻 Node 服务用 pg 连接池(pooled 端点):跨境链路抖动时由连接池自动重连,
-// 比逐查询 HTTPS(neon-http)更稳;neon-http 留给未来 serverless 部署形态。
-//
-// Neon CLI 把连接串写在仓库根 .env.local;生产形态由 manual serve 注入环境变量(T8)。
+// neon-http(fetch 驱动):Node 与 Cloudflare Workers 通用;
+// 自定义 fetch 带瞬时错误重试,对冲跨境链路抖动。
+const TRANSIENT_CODES = new Set([
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "ETIMEDOUT",
+  "EAI_AGAIN",
+  "ENOTFOUND",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_SOCKET",
+]);
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function fetchWithRetry(input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      return await fetch(input, init);
+    } catch (error) {
+      const err = error as Error & { cause?: { code?: string } };
+      const transient =
+        TRANSIENT_CODES.has(err.cause?.code ?? "") || err.name === "TypeError";
+      if (!transient || attempt === 5) throw error;
+      lastError = error;
+      await sleep(400 * attempt);
+    }
+  }
+  throw lastError;
+}
+
+// Neon CLI 把连接串写在仓库根 .env.local;生产形态由部署环境注入(Cloudflare secret / manual serve)。
 function loadEnvOnce() {
   if (process.env.DATABASE_URL) return;
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const candidates = [
-    path.resolve(here, "../../../.env.local"), // 仓库根
-    path.resolve(here, "../../.env.local"), // 本包目录
-  ];
-  for (const file of candidates) {
-    try {
-      process.loadEnvFile(file);
-      if (process.env.DATABASE_URL) return;
-    } catch {
-      // 文件不存在则尝试下一个
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    for (const file of [
+      path.resolve(here, "../../../.env.local"), // 仓库根
+      path.resolve(here, "../../.env.local"), // 本包目录
+    ]) {
+      try {
+        process.loadEnvFile(file);
+        if (process.env.DATABASE_URL) return;
+      } catch {
+        // 文件不存在则尝试下一个
+      }
     }
+  } catch {
+    // Workers 等环境无 node:path/url,由部署环境注入 env
   }
 }
 loadEnvOnce();
@@ -28,97 +59,20 @@ loadEnvOnce();
 export const dbConfigured = () =>
   Boolean(process.env.DATABASE_URL ?? process.env.DATABASE_URL_UNPOOLED);
 
-const TRANSIENT_CODES = new Set([
-  "ECONNRESET",
-  "ECONNREFUSED",
-  "ETIMEDOUT",
-  "EAI_AGAIN",
-  "ENOTFOUND",
-  "57P01", // admin shutdown
-  "57P03", // cannot connect now
-]);
+// 全局替换 neon-http 的 fetch 为重试版(v1.x 通过 neonConfig 注入)
+(neonConfig as { fetch?: typeof fetch }).fetch = fetchWithRetry as typeof fetch;
 
-function isTransientError(error: unknown): boolean {
-  const err = error as Error & { code?: string };
-  if (TRANSIENT_CODES.has(err.code ?? "")) return true;
-  const msg = err.message ?? "";
-  return (
-    msg.includes("Connection terminated") ||
-    msg.includes("server closed the connection") ||
-    msg.includes("socket hang up") ||
-    msg.includes("Connection ended unexpectedly")
-  );
-}
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-// 跨境链路偶发重置:给连接池的 query/connect 加瞬时错误重试。
-// 仅对 Promise 用法重试(回调透传),drizzle 走 Promise 路径。
-function patchPoolWithRetry(pool: Pool): Pool {
-  const originalQuery = pool.query.bind(pool);
-  const originalConnect = pool.connect.bind(pool);
-  (pool as Pool & { query: typeof pool.query }).query = ((
-    ...args: Parameters<typeof originalQuery>
-  ) => {
-    if (typeof args[args.length - 1] === "function") {
-      return originalQuery(...args);
-    }
-    return (async () => {
-      for (let attempt = 1; attempt <= 5; attempt++) {
-        try {
-          return await originalQuery(
-            ...(args as Parameters<typeof originalQuery>),
-          );
-        } catch (error) {
-          if (!isTransientError(error) || attempt === 5) throw error;
-          await sleep(400 * attempt);
-        }
-      }
-      throw new Error("unreachable");
-    })() as unknown as ReturnType<typeof originalQuery>;
-  }) as typeof pool.query;
-  (pool as Pool & { connect: typeof pool.connect }).connect = ((
-    ...args: Parameters<typeof originalConnect>
-  ) => {
-    if (typeof args[args.length - 1] === "function") {
-      return originalConnect(...args);
-    }
-    return (async () => {
-      for (let attempt = 1; attempt <= 5; attempt++) {
-        try {
-          return await originalConnect(
-            ...(args as Parameters<typeof originalConnect>),
-          );
-        } catch (error) {
-          if (!isTransientError(error) || attempt === 5) throw error;
-          await sleep(400 * attempt);
-        }
-      }
-      throw new Error("unreachable");
-    })() as unknown as ReturnType<typeof originalConnect>;
-  }) as typeof pool.connect;
-  return pool;
-}
-
-let pool: Pool | undefined;
-let poolUrl: string | undefined;
+let cachedUrl: string | undefined;
+let cachedFn: ReturnType<typeof neon> | undefined;
 
 export function getDb() {
   const url = process.env.DATABASE_URL ?? process.env.DATABASE_URL_UNPOOLED;
   if (!url) {
     throw new Error("DATABASE_URL 未配置:Neon 连接串应位于仓库根 .env.local");
   }
-  if (!pool || poolUrl !== url) {
-    void pool?.end().catch(() => undefined);
-    pool = patchPoolWithRetry(
-      new Pool({
-        connectionString: url,
-        max: 5,
-        idleTimeoutMillis: 30_000,
-        connectionTimeoutMillis: 10_000,
-      }),
-    );
-    poolUrl = url;
+  if (url !== cachedUrl) {
+    cachedUrl = url;
+    cachedFn = neon(url);
   }
-  return drizzle(pool);
+  return drizzle(cachedFn!);
 }
