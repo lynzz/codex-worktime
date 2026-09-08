@@ -26,11 +26,15 @@ export const loadTimesheet = createServerFn({ method: "GET" })
     const t = todayKey();
     const from = addDays(monthStart(data.date < monthStart(t) ? data.date : t), -7);
     const to = addDays(nextMonthFirst(data.date > t ? data.date : t), 7);
+    // 服务端内部直连 Hono:带内部凭证头(auth 中间件识别),不经浏览器 cookie
+    const internalHeaders = {
+      "x-internal-key": process.env.ACCESS_PASSWORD ?? "",
+    };
     const [projectsRes, entriesRes, tasksRes, totalRes] = await Promise.all([
-      honoApi.request("/api/projects"),
-      honoApi.request(`/api/entries?from=${from}&to=${to}`),
-      honoApi.request("/api/tasks"),
-      honoApi.request("/api/entries/total"),
+      honoApi.request("/api/projects", { headers: internalHeaders }),
+      honoApi.request(`/api/entries?from=${from}&to=${to}`, { headers: internalHeaders }),
+      honoApi.request("/api/tasks", { headers: internalHeaders }),
+      honoApi.request("/api/entries/total", { headers: internalHeaders }),
     ]);
     return {
       projects: (await projectsRes.json()) as Project[],

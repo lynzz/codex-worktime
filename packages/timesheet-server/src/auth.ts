@@ -51,6 +51,8 @@ export function authMiddleware() {
   return async (c: any, next: () => Promise<void>) => {
     // 未配置口令 = 不启用登录(本地开发)
     if (!secret) return next();
+    // 服务端内部调用(loader 的 server fn 直连 Hono):内部头携带口令即可
+    if (c.req.header("x-internal-key") === secret) return next();
     const cookie = getCookie(c as never, COOKIE);
     if (await verifySession(cookie, secret)) return next();
     return unauthorized(c);
