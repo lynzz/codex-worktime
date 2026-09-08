@@ -98,3 +98,15 @@ npm run analyzer -- manual import /path/to/timesheet.PROTOTYPE-WIPE-ME.json
 ```
 
 Backup/reset for this domain are in-app export and the double-confirmed 清空 button in the ⚙ panel; `data backup`/`data delete` still manage only the local AI-event store.
+
+## Deploy (Cloudflare Workers)
+
+```sh
+cd web
+DEPLOY_TARGET=cloudflare npx vite build
+CLOUDFLARE_API_TOKEN=... npx wrangler deploy   # DATABASE_URL 已在 worker secret
+```
+
+Live: https://gongshi-suji.lynzz168.workers.dev
+Auth plan: Cloudflare Access on a custom domain (requires enabling Zero
+Trust + a zone; workers.dev cannot be protected by Access policies).
