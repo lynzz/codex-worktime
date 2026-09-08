@@ -45,6 +45,20 @@ const TITLES: Record<string, string> = {
 
 function RootComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  // 登录页独立布局(无侧栏/页头)
+  if (pathname === "/login") {
+    return (
+      <html lang="zh-CN">
+        <head>
+          <HeadContent />
+        </head>
+        <body>
+          <Outlet />
+          <Scripts />
+        </body>
+      </html>
+    );
+  }
   return (
     <html lang="zh-CN">
       <head>

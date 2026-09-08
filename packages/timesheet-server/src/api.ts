@@ -8,8 +8,14 @@ import { aggregateTaskRows, buildTaskListWorkbook } from "./export-xlsx.js";
 import { importPrototypeTimesheet } from "./import-prototype.js";
 import { importTaskListWorkbook } from "./import-xlsx.js";
 import { entries as entriesTable, projects as projectsTable } from "./schema.js";
+import { authMiddleware, loginHandler, logoutHandler } from "./auth.js";
 
 export const api = new Hono();
+
+// 登录(口令在 ACCESS_PASSWORD secret;未配置则登录页不出现)
+api.post("/api/auth/login", loginHandler);
+api.post("/api/auth/logout", logoutHandler);
+api.use("*", authMiddleware());
 
 // 下载空白任务清单模板(与导出/导入同构)
 api.get("/api/import/template", async (c) => {
