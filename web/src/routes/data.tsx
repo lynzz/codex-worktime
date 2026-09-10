@@ -1,3 +1,4 @@
+import { RouteErrorBoundary } from "~/components/route-error";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { Button, Card } from "~/components/ui";
 import { ImportForm } from "~/components/ImportDialog";
@@ -6,6 +7,7 @@ import { api } from "~/lib/api";
 import { loadTimesheet, searchSchema } from "~/lib/timesheet-route";
 
 export const Route = createFileRoute("/data")({
+  errorComponent: RouteErrorBoundary,
   validateSearch: (search) => searchSchema.parse(search),
   loaderDeps: ({ search: { date } }) => ({ date }),
   loader: ({ deps: { date } }) => loadTimesheet({ data: { date } }),
