@@ -26,7 +26,7 @@ export const Route = createRootRoute({
         href:
           "data:image/svg+xml," +
           encodeURIComponent(
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⏱️</text></svg>',
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#2563eb"/><path d="M16 7a9 9 0 1 0 9 9h-2.5A6.5 6.5 0 1 1 16 9.5V13l5-4-5-4v2z" fill="#fff"/><path d="M15 11h2v6h-2z" fill="#fff"/><path d="M15 10h2v2h-2z" fill="#fff"/></svg>',
           ),
       },
     ],
