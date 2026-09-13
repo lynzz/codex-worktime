@@ -1,4 +1,4 @@
-import { integer, pgTable, text, date, boolean } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, date, boolean, timestamp } from "drizzle-orm/pg-core";
 
 // 数据模型由 spec #11 / ADR-0003 固定;一次迁移建齐三张表,
 // 各票只暴露各自的路由与 UI。
@@ -32,4 +32,6 @@ export const entries = pgTable("entries", {
   }),
   category: text("category"),
   note: text("note"),
+  // 录入时刻(主页时间轴展示);历史行由迁移补默认值
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

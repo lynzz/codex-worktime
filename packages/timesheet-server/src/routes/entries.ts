@@ -28,7 +28,7 @@ entriesRouter.get("/", async (c) => {
     .from(entries)
     .where(conditions.length ? and(...conditions) : undefined)
     .orderBy(asc(entries.date), asc(entries.title), asc(entries.id));
-  return c.json(rows satisfies Entry[]);
+  return c.json(rows as unknown as Entry[]);
 });
 
 entriesRouter.post("/", async (c) => {
@@ -67,7 +67,7 @@ entriesRouter.post("/", async (c) => {
     .returning();
   const row = rows[0];
   if (!row) return c.json({ error: "创建失败" }, 500);
-  return c.json(row satisfies Entry, 201);
+  return c.json(row as unknown as Entry, 201);
 });
 
 // 全部条目的累计分钟(页头总工时徽章)
@@ -147,7 +147,9 @@ entriesRouter.post("/replace-cell", async (c) => {
             eq(entries.title, title),
           ),
     );
-  const ids = dayEntries.filter((x) => cellReplaceMatches({ date, projectId, taskId, title }, x)).map((x) => x.id);
+  const ids = dayEntries
+    .filter((x) => cellReplaceMatches({ date, projectId, taskId, title }, x as unknown as Parameters<typeof cellReplaceMatches>[1]))
+    .map((x) => x.id);
 
   const result = await db.transaction(async (tx) => {
     for (const id of ids) {
@@ -171,7 +173,7 @@ entriesRouter.post("/replace-cell", async (c) => {
     }
     return null;
   });
-  return c.json({ ok: true, entry: result satisfies Entry | null });
+  return c.json({ ok: true, entry: result as { id: string } | null });
 });
 
 entriesRouter.patch("/:id", async (c) => {
@@ -186,7 +188,7 @@ entriesRouter.patch("/:id", async (c) => {
     .returning();
   const row = updated[0];
   if (!row) return c.json({ error: "条目不存在" }, 404);
-  return c.json(row satisfies Entry);
+  return c.json(row as unknown as Entry);
 });
 
 entriesRouter.delete("/:id", async (c) => {

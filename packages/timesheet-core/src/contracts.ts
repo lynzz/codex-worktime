@@ -40,6 +40,8 @@ export const entrySchema = z.object({
   taskId: z.string().nullable(),
   category: z.string().nullable(),
   note: z.string().nullable(),
+  // 录入时刻(ISO);旧数据由迁移补默认值
+  createdAt: z.string().nullable().optional(),
 });
 export type Entry = z.infer<typeof entrySchema>;
 

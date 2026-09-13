@@ -7,6 +7,7 @@ import { tasksRouter } from "./routes/tasks.js";
 import { aggregateTaskRows, buildTaskListWorkbook } from "./export-xlsx.js";
 import { importPrototypeTimesheet } from "./import-prototype.js";
 import { importTaskListWorkbook } from "./import-xlsx.js";
+import type { Entry } from "@codex-worktime/timesheet-core";
 import { entries as entriesTable, projects as projectsTable } from "./schema.js";
 import { authMiddleware, loginHandler, logoutHandler } from "./auth.js";
 
@@ -110,7 +111,7 @@ api.get("/api/export/xlsx", async (c) => {
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(asc(entriesTable.date)),
   ]);
-  const buffer = await buildTaskListWorkbook(aggregateTaskRows(projects, entries));
+  const buffer = await buildTaskListWorkbook(aggregateTaskRows(projects, entries as unknown as Entry[]));
   c.header(
     "content-disposition",
     `attachment; filename="task-list-${range.label}.xlsx"; filename*=UTF-8''${encodeURIComponent(`工时任务清单_${range.label}`)}.xlsx`,

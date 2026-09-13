@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DataRouteImport } from './routes/data'
 import { Route as DayRouteImport } from './routes/day'
+import { Route as HomeRouteImport } from './routes/home'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MonthRouteImport } from './routes/month'
 import { Route as ProjectsRouteImport } from './routes/projects'
@@ -31,6 +32,11 @@ const DataRoute = DataRouteImport.update({
 const DayRoute = DayRouteImport.update({
   id: '/day',
   path: '/day',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HomeRoute = HomeRouteImport.update({
+  id: '/home',
+  path: '/home',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -63,6 +69,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/data': typeof DataRoute
   '/day': typeof DayRoute
+  '/home': typeof HomeRoute
   '/login': typeof LoginRoute
   '/month': typeof MonthRoute
   '/projects': typeof ProjectsRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/data': typeof DataRoute
   '/day': typeof DayRoute
+  '/home': typeof HomeRoute
   '/login': typeof LoginRoute
   '/month': typeof MonthRoute
   '/projects': typeof ProjectsRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/data': typeof DataRoute
   '/day': typeof DayRoute
+  '/home': typeof HomeRoute
   '/login': typeof LoginRoute
   '/month': typeof MonthRoute
   '/projects': typeof ProjectsRoute
@@ -96,6 +105,7 @@ export interface FileRouteTypes {
     | '/'
     | '/data'
     | '/day'
+    | '/home'
     | '/login'
     | '/month'
     | '/projects'
@@ -106,6 +116,7 @@ export interface FileRouteTypes {
     | '/'
     | '/data'
     | '/day'
+    | '/home'
     | '/login'
     | '/month'
     | '/projects'
@@ -116,6 +127,7 @@ export interface FileRouteTypes {
     | '/'
     | '/data'
     | '/day'
+    | '/home'
     | '/login'
     | '/month'
     | '/projects'
@@ -127,6 +139,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DataRoute: typeof DataRoute
   DayRoute: typeof DayRoute
+  HomeRoute: typeof HomeRoute
   LoginRoute: typeof LoginRoute
   MonthRoute: typeof MonthRoute
   ProjectsRoute: typeof ProjectsRoute
@@ -155,6 +168,13 @@ declare module '@tanstack/react-router' {
       path: '/day'
       fullPath: '/day'
       preLoaderRoute: typeof DayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/home': {
+      id: '/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof HomeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -199,6 +219,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DataRoute: DataRoute,
   DayRoute: DayRoute,
+  HomeRoute: HomeRoute,
   LoginRoute: LoginRoute,
   MonthRoute: MonthRoute,
   ProjectsRoute: ProjectsRoute,
