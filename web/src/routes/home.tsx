@@ -141,7 +141,7 @@ function HomePage() {
   );
 }
 
-// —— 底部输入区 ——
+// —— 底部输入区(单行自适应 + 实时解析回显)——
 function Composer({
   activeProjects,
   onDone,
@@ -151,20 +151,23 @@ function Composer({
 }) {
   const [open, setOpen] = useState(false);
   const [projectId, setProjectId] = useState(activeProjects[0]?.id ?? "");
+  const [raw, setRaw] = useState("");
   const [flash, setFlash] = useState("");
   const [busy, setBusy] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  function parseLine(raw: string) {
-    let text = raw.trim();
+  // 实时解析:输入即回显(项目/时长/标题预览)
+  const parsed = useMemo(() => parseLine(raw), [raw]);
+  function parseLine(text: string) {
+    let t = text.trim();
     let minutes = 0;
-    let pid = projectId || activeProjects[0]?.id || "";
-    const durMatch = text.match(/(\d+(?:\.\d+)?h|\d+m|\d+:\d{2})(?=\s|$)/i);
+    let pid = projectId || (activeProjects[0]?.id ?? "");
+    const durMatch = t.match(/(\d+(?:\.\d+)?h|\d+m|\d+:\d{2})(?=\s|$)/i);
     if (durMatch) {
       minutes = parseDurationInput(durMatch[1]) ?? 0;
-      text = text.replace(durMatch[0], "").trim();
+      t = t.replace(durMatch[0], "").trim();
     }
-    const tagMatch = text.match(/#(\S+)/);
+    const tagMatch = t.match(/#(\S+)/);
     if (tagMatch) {
       const tag = tagMatch[1]!;
       const lower = tag.toLowerCase();
@@ -177,25 +180,28 @@ function Composer({
       );
       if (found) {
         pid = found.id;
-        text = text.replace(tagMatch[0], "").trim();
+        t = t.replace(tagMatch[0], "").trim();
       }
     }
-    return { title: text, minutes, projectId: pid };
+    return { title: t, minutes, projectId: pid };
   }
 
   async function send() {
-    const raw = taRef.current?.value ?? "";
     if (!raw.trim()) return;
-    const { title, minutes, projectId: pid } = parseLine(raw);
-    if (!title) return setFlash("写点任务内容…"), void 0;
-    if (!minutes) return setFlash("带上时长,如:1.5h / 90m / 1:30"), void 0;
-    if (!pid) return setFlash("项目还没加载好,稍后再试"), void 0;
+    if (!parsed.title) return setFlash("写点任务内容…"), void 0;
+    if (!parsed.minutes) return setFlash("带上时长,如:1.5h / 90m / 1:30"), void 0;
+    if (!parsed.projectId) return setFlash("项目还没加载好,稍后再试"), void 0;
     setBusy(true);
     setFlash("");
     try {
-      await api.createEntry({ date: todayKey(), projectId: pid, title, minutes });
-      if (taRef.current) taRef.current.value = "";
-      setFlash(`✓ 已记 ${formatHours(minutes)}`);
+      await api.createEntry({
+        date: todayKey(),
+        projectId: parsed.projectId,
+        title: parsed.title,
+        minutes: parsed.minutes,
+      });
+      setRaw("");
+      setFlash(`✓ 已记 ${formatHours(parsed.minutes)}`);
       setTimeout(() => setFlash(""), 2000);
       onDone();
     } catch (e) {
@@ -205,12 +211,18 @@ function Composer({
     }
   }
 
+  // 高度自适应:1 行起步,内容多时自动长高(上限 4 行)
+  function autoResize(el: HTMLTextAreaElement) {
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 88)}px`;
+  }
+
   if (!open) {
     return (
       <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white px-4 py-3 lg:pl-[248px]">
         <div className="mx-auto max-w-2xl">
           <button
-            className="w-full rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 py-3 text-sm text-gray-400 transition-colors hover:border-blue-300"
+            className="w-full rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 py-2.5 text-sm text-gray-400 transition-colors hover:border-blue-300"
             onClick={() => {
               setOpen(true);
               setTimeout(() => taRef.current?.focus(), 50);
@@ -223,24 +235,21 @@ function Composer({
     );
   }
 
+  const projName = activeProjects.find((p) => p.id === parsed.projectId)?.name ?? "";
+
   return (
-    <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white px-4 py-3 lg:pl-[248px]">
-      <div className="mx-auto flex max-w-2xl flex-col gap-2 rounded-2xl border-2 border-blue-400 bg-white px-3 py-2 shadow-lg">
-        <div className="flex items-center gap-1.5 text-xs text-gray-400">
-          <HeroSelect
-            ariaLabel="项目"
-            className="w-32"
-            items={activeProjects.map((p) => ({ id: p.id, name: p.name }))}
-            selectedKey={projectId || activeProjects[0]?.id || ""}
-            onSelectionChange={setProjectId}
-          />
-          <span>· 今天 · 支持 #项目标记 与行内时长</span>
-        </div>
-        <TextArea
+    <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white px-4 py-2.5 lg:pl-[248px]">
+      <div className="mx-auto flex max-w-2xl items-start gap-2 rounded-2xl border-2 border-blue-400 bg-white px-3 py-2 shadow-lg">
+        <textarea
           ref={taRef}
-          rows={2}
-          placeholder="任务描述… 1.5h(#项目 可选)"
-          className="border-none bg-transparent focus:ring-0"
+          rows={1}
+          value={raw}
+          placeholder="任务描述… 1.5h #项目(可选)"
+          className="mt-1 min-h-[28px] w-full flex-1 resize-none self-stretch overflow-hidden border-none bg-transparent px-0 py-0.5 text-sm leading-7 outline-none placeholder:text-gray-400"
+          onChange={(e) => {
+            setRaw(e.target.value);
+            autoResize(e.target);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
@@ -248,20 +257,34 @@ function Composer({
             }
           }}
         />
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-blue-600">{flash}</span>
-          <Button
-            className="ml-auto"
-            size="sm"
-            variant="primary"
-            isDisabled={busy}
-            onPress={() => void send()}
-          >
-            {busy ? <Spinner size="sm" /> : "记一笔 ↵"}
-          </Button>
-          <Button size="sm" variant="ghost" onPress={() => setOpen(false)}>
-            收起
-          </Button>
+        <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              variant="primary"
+              isDisabled={busy}
+              onPress={() => void send()}
+            >
+              {busy ? <Spinner size="sm" /> : "记 ↵"}
+            </Button>
+            <button
+              className="text-xs text-gray-300 hover:text-gray-500"
+              aria-label="收起"
+              onClick={() => setOpen(false)}
+            >
+              ✕
+            </button>
+          </div>
+          {/* 实时解析回显:项目 · 时长 */}
+          <div className="flex items-center gap-1 text-[11px] leading-none">
+            <span className="text-gray-400">{projName || "…"}</span>
+            {parsed.minutes > 0 && (
+              <span className="rounded bg-blue-50 px-1.5 py-0.5 font-medium text-blue-600">
+                {formatHours(parsed.minutes)}
+              </span>
+            )}
+            {flash && <span className="text-blue-600">{flash}</span>}
+          </div>
         </div>
       </div>
     </div>
