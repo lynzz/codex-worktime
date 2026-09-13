@@ -1,0 +1,5 @@
+[     598ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/projects:0
+[     615ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/tasks:0
+[    1925ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/tasks:0
+[    1942ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/projects:0
+[    3426ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/tasks:0

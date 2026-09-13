@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 // 变体经 ?variant= 切换:timeline / cards / waterfall
 import { z } from "zod";
 import {
+  addDays,
   formatHours,
   parseDurationInput,
+  startOfWeek,
   todayKey,
   type Entry,
   type Project,
@@ -111,16 +113,16 @@ function ThinoHome() {
     void navigate({ to: "/thino", search: { variant: v } as never });
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      {/* 顶部条 */}
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-gray-200 bg-white/80 px-4 py-2.5 backdrop-blur">
-        <span className="text-sm font-semibold">今天</span>
-        <span className="text-xs text-gray-400">{todays.length} 条</span>
-        <span className="ml-auto text-sm font-bold">{formatHours(todayMin)}</span>
-      </div>
-
+    <div className="flex min-h-screen bg-gray-50">
       {/* 时间流主体 */}
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-32 pt-4">
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* 顶部条 */}
+        <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-gray-200 bg-white/80 px-4 py-2.5 backdrop-blur">
+          <span className="text-sm font-semibold">今天</span>
+          <span className="text-xs text-gray-400">{todays.length} 条</span>
+          <span className="ml-auto text-sm font-bold">{formatHours(todayMin)}</span>
+        </div>
+        <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-32 pt-4">
         {variant === "timeline" && (
           <Timeline entries={todays} projects={projects} />
         )}
@@ -139,7 +141,13 @@ function ThinoHome() {
         <pre className="mt-6 rounded-xl bg-gray-900 p-3 text-[11px] leading-4 text-gray-300">
 {JSON.stringify({ variant, entries: todays.length, draft }, null, 1)}
         </pre>
-      </main>
+        </main>
+      </div>
+
+      {/* 右侧热点图(GitHub contributions 风格) */}
+      <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-l border-gray-200 bg-white px-4 py-4 xl:block">
+        <Heatmap entries={entries} projects={projects} />
+      </aside>
 
       {/* 底部输入区(Thino 核心) */}
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-gray-200 bg-white px-4 py-3">
@@ -204,6 +212,95 @@ function ThinoHome() {
             <button className="pointer-events-auto rounded-full bg-gray-900/80 px-3 py-1 text-[11px] text-white" onClick={() => switchVariant("waterfall")}>瀑布</button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// —— 右侧栏:热点图(GitHub contributions 风格,近 12 周)——
+function Heatmap({ entries, projects }: { entries: Entry[]; projects: Project[] }) {
+  const weeks = 12;
+  const cells = useMemo(() => {
+    // 以周一为首列,近 N 周 × 7 天
+    const t = todayKey();
+    const thisMonday = startOfWeek(t);
+    const arr: { date: string; minutes: number }[][] = [];
+    for (let w = weeks - 1; w >= 0; w--) {
+      const col: { date: string; minutes: number }[] = [];
+      for (let d = 0; d < 7; d++) {
+        const date = addDays(thisMonday, -w * 7 + d);
+        const minutes = entries
+          .filter((e) => e.date === date)
+          .reduce((s, e) => s + e.minutes, 0);
+        col.push({ date, minutes });
+      }
+      arr.push(col);
+    }
+    return arr;
+  }, [entries]);
+
+  const max = Math.max(60, ...cells.flat().map((c) => c.minutes));
+  const total = cells.flat().reduce((s, c) => s + c.minutes, 0);
+
+  const level = (m: number) => {
+    if (m === 0) return "bg-gray-100";
+    const r = m / max;
+    if (r <= 0.25) return "bg-blue-200";
+    if (r <= 0.5) return "bg-blue-300";
+    if (r <= 0.75) return "bg-blue-500";
+    return "bg-blue-700";
+  };
+
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="text-sm font-semibold">热点图</span>
+        <span className="text-xs text-gray-400">{formatHours(total)} / 12周</span>
+      </div>
+      <div className="flex gap-[3px]">
+        {cells.map((col, i) => (
+          <div key={i} className="flex flex-col gap-[3px]">
+            {col.map((c) => (
+              <div
+                key={c.date}
+                className={`h-3.5 w-3.5 rounded-[3px] ${level(c.minutes)}`}
+                title={`${c.date} · ${formatHours(c.minutes)}`}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 flex items-center gap-1.5 text-[10px] text-gray-400">
+        <span>少</span>
+        <span className="h-3 w-3 rounded-[3px] bg-gray-100" />
+        <span className="h-3 w-3 rounded-[3px] bg-blue-200" />
+        <span className="h-3 w-3 rounded-[3px] bg-blue-300" />
+        <span className="h-3 w-3 rounded-[3px] bg-blue-500" />
+        <span className="h-3 w-3 rounded-[3px] bg-blue-700" />
+        <span>多</span>
+      </div>
+      {/* 按项目分色饼图条 */}
+      <div className="mt-4 border-t border-gray-100 pt-3">
+        <p className="mb-1.5 text-xs font-medium text-gray-500">按项目(全部时间)</p>
+        {entries.length === 0 && <p className="text-xs text-gray-300">暂无数据</p>}
+        {Object.entries(
+          entries.reduce<Record<string, number>>((acc, e) => {
+            acc[e.projectId] = (acc[e.projectId] ?? 0) + e.minutes;
+            return acc;
+          }, {}),
+        )
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 6)
+          .map(([pid, min]) => (
+            <div key={pid} className="flex items-center gap-2 py-0.5 text-xs">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ background: projectColor(pid) }}
+              />
+              <span className="flex-1 truncate text-gray-600">{projects.find((p) => p.id === pid)?.name ?? pid.slice(0, 8)}</span>
+              <span className="font-medium">{formatHours(min)}</span>
+            </div>
+          ))}
       </div>
     </div>
   );
