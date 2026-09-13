@@ -1,2 +1,16 @@
 [    1094ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/entries:0
 [    1103ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/tasks:0
+[  252910ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/entries:0
+[  252912ms] Error: 请求失败(500)
+    at e (http://localhost:8787/assets/api-Dc3be4-L.js:1:248)
+    at async O (http://localhost:8787/assets/thino-BItzyjzd.js:1:1325)
+[  256846ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/entries:0
+[  256849ms] Error: 请求失败(500)
+    at e (http://localhost:8787/assets/api-Dc3be4-L.js:1:248)
+    at async O (http://localhost:8787/assets/thino-BItzyjzd.js:1:1325)
+[  257893ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/entries:0
+[  257895ms] Error: 请求失败(500)
+    at e (http://localhost:8787/assets/api-Dc3be4-L.js:1:248)
+    at async O (http://localhost:8787/assets/thino-BItzyjzd.js:1:1325)
+[  260288ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/entries:0
+[  261135ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/entries:0

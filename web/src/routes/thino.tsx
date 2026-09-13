@@ -209,12 +209,17 @@ function ThinoHome() {
   );
 }
 
-// —— 变体 1:时间轴(左侧竖线 + 时间点)——
+// —— 变体 1:时间轴(左侧竖线 + 录入时间)——
 function Timeline({ entries, projects }: { entries: Entry[]; projects: Project[] }) {
+  // 显示"多久前"(Thino 风格相对时间),服务端无 createdAt → 按条目顺序估算
+  const ago = (idx: number) => {
+    if (idx === 0) return "刚刚";
+    return `${idx * 30}分钟前`; // 原型近似值,真实现接 createdAt
+  };
   return (
     <div className="relative pl-4">
       <div className="absolute bottom-0 left-1 top-1 w-px bg-gray-200" />
-      {entries.map((e) => (
+      {entries.map((e, idx) => (
         <div key={e.id} className="relative mb-3">
           <span
             className="absolute -left-[13px] top-1.5 h-2 w-2 rounded-full ring-2 ring-gray-50"
@@ -222,6 +227,7 @@ function Timeline({ entries, projects }: { entries: Entry[]; projects: Project[]
           />
           <div className="rounded-xl border border-gray-200 bg-white px-3 py-2">
             <div className="flex items-baseline gap-2">
+              <span className="text-[11px] font-medium text-gray-400 tabular-nums">{ago(idx)}</span>
               <span className="text-sm">{e.title}</span>
               <span className="ml-auto text-xs font-bold">{formatHours(e.minutes)}</span>
             </div>
