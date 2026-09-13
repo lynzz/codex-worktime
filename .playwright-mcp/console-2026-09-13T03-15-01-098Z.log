@@ -1,0 +1,4 @@
+[     306ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/tasks:0
+[     308ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/entries:0
+[    2008ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/tasks:0
+[    3523ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/tasks:0

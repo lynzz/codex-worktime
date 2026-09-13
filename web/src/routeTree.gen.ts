@@ -15,6 +15,7 @@ import { Route as DayRouteImport } from './routes/day'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MonthRouteImport } from './routes/month'
 import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as ThinoRouteImport } from './routes/thino'
 import { Route as WeekRouteImport } from './routes/week'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 
@@ -48,6 +49,11 @@ const ProjectsRoute = ProjectsRouteImport.update({
   path: '/projects',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ThinoRoute = ThinoRouteImport.update({
+  id: '/thino',
+  path: '/thino',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const WeekRoute = WeekRouteImport.update({
   id: '/week',
   path: '/week',
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/month': typeof MonthRoute
   '/projects': typeof ProjectsRoute
+  '/thino': typeof ThinoRoute
   '/week': typeof WeekRoute
   '/api/$': typeof ApiSplatRoute
 }
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/month': typeof MonthRoute
   '/projects': typeof ProjectsRoute
+  '/thino': typeof ThinoRoute
   '/week': typeof WeekRoute
   '/api/$': typeof ApiSplatRoute
 }
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/month': typeof MonthRoute
   '/projects': typeof ProjectsRoute
+  '/thino': typeof ThinoRoute
   '/week': typeof WeekRoute
   '/api/$': typeof ApiSplatRoute
 }
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/month'
     | '/projects'
+    | '/thino'
     | '/week'
     | '/api/$'
   fileRoutesByTo: FileRoutesByTo
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/month'
     | '/projects'
+    | '/thino'
     | '/week'
     | '/api/$'
   id:
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/month'
     | '/projects'
+    | '/thino'
     | '/week'
     | '/api/$'
   fileRoutesById: FileRoutesById
@@ -130,6 +142,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MonthRoute: typeof MonthRoute
   ProjectsRoute: typeof ProjectsRoute
+  ThinoRoute: typeof ThinoRoute
   WeekRoute: typeof WeekRoute
   ApiSplatRoute: typeof ApiSplatRoute
 }
@@ -178,6 +191,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/thino': {
+      id: '/thino'
+      path: '/thino'
+      fullPath: '/thino'
+      preLoaderRoute: typeof ThinoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/week': {
       id: '/week'
       path: '/week'
@@ -202,6 +222,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MonthRoute: MonthRoute,
   ProjectsRoute: ProjectsRoute,
+  ThinoRoute: ThinoRoute,
   WeekRoute: WeekRoute,
   ApiSplatRoute: ApiSplatRoute,
 }

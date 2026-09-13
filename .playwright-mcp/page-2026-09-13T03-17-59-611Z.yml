@@ -1,0 +1,52 @@
+- generic [active] [ref=e1]:
+  - complementary [ref=e2]:
+    - generic [ref=e8]:
+      - generic [ref=e9]: 工时速记
+      - generic [ref=e10]: 手工登记外包投入
+    - generic [ref=e11]:
+      - generic [ref=e12]:
+        - generic [ref=e13]: 工时记录
+        - navigation [ref=e14]:
+          - link "周网格" [ref=e15] [cursor=pointer]:
+            - /url: /week
+          - link "日清单" [ref=e21] [cursor=pointer]:
+            - /url: /day
+          - link "月日历" [ref=e24] [cursor=pointer]:
+            - /url: /month
+      - generic [ref=e27]:
+        - generic [ref=e28]: 管理
+        - navigation [ref=e29]:
+          - link "项目与任务行" [ref=e30] [cursor=pointer]:
+            - /url: /projects
+          - link "导入导出" [ref=e33] [cursor=pointer]:
+            - /url: /data
+  - generic [ref=e38]:
+    - banner [ref=e39]:
+      - button "切换侧栏" [ref=e40]
+      - heading "工时速记" [level=1] [ref=e44]
+      - generic [ref=e45]: 总工时 0h
+    - main [ref=e47]:
+      - generic [ref=e48]:
+        - generic [ref=e49]:
+          - generic [ref=e50]: 今天
+          - generic [ref=e51]: 2 条
+          - generic [ref=e52]: 2.5h
+        - main [ref=e53]:
+          - generic [ref=e62]:
+            - generic [ref=e66]:
+              - generic [ref=e67]:
+                - generic [ref=e68]: 微生物计划调试
+                - generic [ref=e69]: 2h
+              - generic [ref=e70]: EQA
+            - generic [ref=e84]:
+              - generic [ref=e85]:
+                - generic [ref=e86]: "Thino验证 #门户"
+                - generic [ref=e87]: 0.5h
+              - generic [ref=e88]: EQA
+          - generic [ref=e55]: "{ \"variant\": \"timeline\", \"entries\": 2, \"draft\": null }"
+        - generic [ref=e57]:
+          - button "⌨ 记一笔工时…" [ref=e89]
+          - generic:
+            - button "时间轴" [ref=e59]
+            - button "卡片" [ref=e60]
+            - button "瀑布" [ref=e61]

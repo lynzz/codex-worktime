@@ -1,0 +1,59 @@
+- generic [ref=f3e1]:
+  - complementary [ref=f3e2]:
+    - generic [ref=f3e8]:
+      - generic [ref=f3e9]: 工时速记
+      - generic [ref=f3e10]: 手工登记外包投入
+    - generic [ref=f3e11]:
+      - generic [ref=f3e12]:
+        - generic [ref=f3e13]: 工时记录
+        - navigation [ref=f3e14]:
+          - link "周网格" [ref=f3e15] [cursor=pointer]:
+            - /url: /week
+          - link "日清单" [ref=f3e21] [cursor=pointer]:
+            - /url: /day
+          - link "月日历" [ref=f3e24] [cursor=pointer]:
+            - /url: /month
+      - generic [ref=f3e27]:
+        - generic [ref=f3e28]: 管理
+        - navigation [ref=f3e29]:
+          - link "项目与任务行" [ref=f3e30] [cursor=pointer]:
+            - /url: /projects
+          - link "导入导出" [ref=f3e33] [cursor=pointer]:
+            - /url: /data
+  - generic [ref=f3e38]:
+    - banner [ref=f3e39]:
+      - button "切换侧栏" [ref=f3e40]
+      - heading "工时速记" [level=1] [ref=f3e44]
+      - generic [ref=f3e45]: 总工时 0h
+    - main [ref=f3e47]:
+      - generic [ref=f3e48]:
+        - generic [ref=f3e49]:
+          - generic [ref=f3e50]: 今天
+          - generic [ref=f3e51]: 1 条
+          - generic [ref=f3e52]: 2h
+        - main [ref=f3e53]:
+          - generic [ref=f3e66]:
+            - generic [ref=f3e67]:
+              - generic [ref=f3e68]: 微生物计划调试
+              - generic [ref=f3e69]: 2h
+            - generic [ref=f3e70]: EQA
+          - generic [ref=f3e55]: "{ \"variant\": \"timeline\", \"entries\": 1, \"draft\": { \"projectId\": \"6e7970d1-844b-4fce-bc7f-1474c870d0da\", \"title\": \"\", \"duration\": \"\" } }"
+        - generic [ref=f3e57]:
+          - generic [ref=f3e71]:
+            - generic [ref=f3e72]:
+              - text: EQA
+              - generic [ref=f3e73]: ·
+              - generic [ref=f3e74]: 今天
+              - generic [ref=f3e75]: ·
+              - generic [ref=f3e76]: "支持 #项目 标记 / 行内时长"
+            - textbox "任务描述… 1.5h(#项目 可选)" [ref=f3e77]: 原型验证任务 0.5h
+            - generic [ref=f3e78]:
+              - combobox [ref=f3e79]:
+                - option "EQA" [selected]
+                - option "门户平台"
+              - button "记一笔 ↵" [active] [ref=f3e80]
+              - button "收起" [ref=f3e81]
+          - generic:
+            - button "时间轴" [ref=f3e59]
+            - button "卡片" [ref=f3e60]
+            - button "瀑布" [ref=f3e61]

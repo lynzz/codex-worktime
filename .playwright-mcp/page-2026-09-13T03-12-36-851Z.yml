@@ -1,0 +1,42 @@
+- generic [active] [ref=f2e1]:
+  - complementary [ref=f2e2]:
+    - generic [ref=f2e8]:
+      - generic [ref=f2e9]: 工时速记
+      - generic [ref=f2e10]: 手工登记外包投入
+    - generic [ref=f2e11]:
+      - generic [ref=f2e12]:
+        - generic [ref=f2e13]: 工时记录
+        - navigation [ref=f2e14]:
+          - link "周网格" [ref=f2e15] [cursor=pointer]:
+            - /url: /week
+          - link "日清单" [ref=f2e21] [cursor=pointer]:
+            - /url: /day
+          - link "月日历" [ref=f2e24] [cursor=pointer]:
+            - /url: /month
+      - generic [ref=f2e27]:
+        - generic [ref=f2e28]: 管理
+        - navigation [ref=f2e29]:
+          - link "项目与任务行" [ref=f2e30] [cursor=pointer]:
+            - /url: /projects
+          - link "导入导出" [ref=f2e33] [cursor=pointer]:
+            - /url: /data
+  - generic [ref=f2e38]:
+    - banner [ref=f2e39]:
+      - button "切换侧栏" [ref=f2e40]
+      - heading "工时速记" [level=1] [ref=f2e44]
+      - generic [ref=f2e45]: 总工时 0h
+    - main [ref=f2e47]:
+      - generic [ref=f2e48]:
+        - generic [ref=f2e49]:
+          - generic [ref=f2e50]: 今天
+          - generic [ref=f2e51]: 0 条
+          - generic [ref=f2e52]: 0h
+        - main [ref=f2e53]:
+          - paragraph [ref=f2e54]: 今天还没记录 — 底部输入一条试试
+          - generic [ref=f2e55]: "{ \"variant\": \"timeline\", \"entries\": 0, \"draft\": null }"
+        - generic [ref=f2e57]:
+          - button "⌨ 记一笔工时…" [ref=f2e58]
+          - generic:
+            - button "时间轴" [ref=f2e59]
+            - button "卡片" [ref=f2e60]
+            - button "瀑布" [ref=f2e61]

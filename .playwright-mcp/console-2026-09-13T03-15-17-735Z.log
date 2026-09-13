@@ -1,0 +1,29 @@
+[     313ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/projects:0
+[     347ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/entries:0
+[    1177ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/projects:0
+[    1226ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/entries:0
+[    2583ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/tasks:0
+[    3081ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/tasks:0
+[    4963ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/projects:0
+[    5101ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/entries:0
+[    5108ms] [ERROR] Failed to load resource: the server responded with a status of 500 () @ http://localhost:8787/api/tasks:0
+[   18159ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ http://localhost:8787/api/entries:0
+[   18159ms] Error: 项目不能为空
+    at e (http://localhost:8787/assets/api-Dc3be4-L.js:1:248)
+    at async O (http://localhost:8787/assets/thino-BItzyjzd.js:1:1325)
+[   20984ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ http://localhost:8787/api/entries:0
+[   20985ms] Error: 项目不能为空
+    at e (http://localhost:8787/assets/api-Dc3be4-L.js:1:248)
+    at async O (http://localhost:8787/assets/thino-BItzyjzd.js:1:1325)
+[   22626ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ http://localhost:8787/api/entries:0
+[   22627ms] Error: 项目不能为空
+    at e (http://localhost:8787/assets/api-Dc3be4-L.js:1:248)
+    at async O (http://localhost:8787/assets/thino-BItzyjzd.js:1:1325)
+[   23399ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ http://localhost:8787/api/entries:0
+[   23400ms] Error: 项目不能为空
+    at e (http://localhost:8787/assets/api-Dc3be4-L.js:1:248)
+    at async O (http://localhost:8787/assets/thino-BItzyjzd.js:1:1325)
+[   24616ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ http://localhost:8787/api/entries:0
+[   24617ms] Error: 项目不能为空
+    at e (http://localhost:8787/assets/api-Dc3be4-L.js:1:248)
+    at async O (http://localhost:8787/assets/thino-BItzyjzd.js:1:1325)
