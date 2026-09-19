@@ -92,16 +92,16 @@ export function MonthCalendar({
         </span>
       </div>
 
-      {/* Teams 风格:日历占满剩余视口高度,行高自动拉伸 */}
-      <div className="flex min-h-0 flex-1 flex-col">
-        <div className="grid shrink-0 grid-cols-7 border-b border-gray-200">
+      {/* Teams 风格:日历占满剩余视口高度,行高自动拉伸;星期行+日格同一边框 */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-200">
+        <div className="grid shrink-0 grid-cols-7 border-b border-gray-200 bg-gray-50">
           {["一", "二", "三", "四", "五", "六", "日"].map((d) => (
             <div key={d} className="py-1.5 text-center text-xs font-medium text-gray-400">
               {d}
             </div>
           ))}
         </div>
-        <div className="grid min-h-0 flex-1 grid-cols-7 gap-px rounded-b-xl border border-t-0 border-gray-200 bg-gray-200">
+        <div className="grid min-h-0 flex-1 grid-cols-7 gap-px bg-gray-200">
           {grid.map((day, i) => {
             if (!day) return <div key={`empty-${i}`} className="bg-gray-50" />;
             const dayEntries = entries.filter((e) => e.date === day);
