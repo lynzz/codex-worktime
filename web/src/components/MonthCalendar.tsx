@@ -14,7 +14,6 @@ import {
 } from "@codex-worktime/timesheet-core";
 import { api } from "~/lib/api";
 import { projectColor } from "~/lib/colors";
-import { HeroSelect } from "~/components/HeroSelect";
 
 function monthLabel(anchor: string): string {
   const [y, m] = anchor.split("-").map(Number);
@@ -197,26 +196,54 @@ function DayEntryModal({
   onGotoDay: (date: string) => void;
 }) {
   const active = projects.filter((p) => !p.archived);
-  const [projectId, setProjectId] = useState(active[0]?.id ?? "");
   const [title, setTitle] = useState("");
-  const [duration, setDuration] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   const dayEntries = entries.filter((e) => e.date === date);
   const dayTotal = dayEntries.reduce((s, e) => s + e.minutes, 0);
 
+  // 实时解析(与主页 Composer 同逻辑)
+  const parsed = useMemo(() => {
+    let text = title.trim();
+    let minutes = 0;
+    let pid = active[0]?.id ?? "";
+    const durMatch = text.match(/(\d+(?:\.\d+)?h|\d+m|\d+:\d{2})(?=\s|$)/i);
+    if (durMatch) {
+      minutes = parseDurationInput(durMatch[1]) ?? 0;
+      text = text.replace(durMatch[0], "").trim();
+    }
+    const tagMatch = text.match(/#(\S+)/);
+    if (tagMatch) {
+      const lower = tagMatch[1]!.toLowerCase();
+      const found = active.find(
+        (p) =>
+          p.name === tagMatch[1] ||
+          p.name.toLowerCase() === lower ||
+          p.name.toLowerCase().startsWith(lower) ||
+          p.name.toLowerCase().includes(lower),
+      );
+      if (found) {
+        pid = found.id;
+        text = text.replace(tagMatch[0], "").trim();
+      }
+    }
+    return { title: text, minutes, projectId: pid };
+  }, [title, active]);
+
   async function add() {
-    const minutes = parseDurationInput(duration);
-    if (!title.trim()) return setError("请填写任务标题");
-    if (minutes === null || Number.isNaN(minutes) || minutes <= 0)
-      return setError("请填写时长(支持 1.5 / 1:30 / 90m)");
+    if (!parsed.title.trim()) return setError("写点任务内容…");
+    if (!parsed.minutes) return setError("带上时长,如:1.5h / 90m / 1:30");
     setBusy(true);
     setError("");
     try {
-      await api.createEntry({ date, projectId, title, minutes });
+      await api.createEntry({
+        date,
+        projectId: parsed.projectId,
+        title: parsed.title,
+        minutes: parsed.minutes,
+      });
       setTitle("");
-      setDuration("");
       onChanged();
     } catch (e) {
       setError((e as Error).message);
@@ -235,43 +262,42 @@ function DayEntryModal({
               {date} {dayOfWeekCN(date)} · 已登记 {formatHours(dayTotal)}
             </Modal.Header>
             <Modal.Body>
-              <div className="flex flex-wrap items-end gap-2">
-                <HeroSelect
-                  ariaLabel="补录项目"
-                  className="w-36"
-                  items={active.map((p) => ({ id: p.id, name: p.name }))}
-                  selectedKey={projectId}
-                  onSelectionChange={setProjectId}
-                />
-                <Input
-                  placeholder="任务标题"
-                  className="w-44"
+              {/* 记一笔同款紧凑输入:单行 + 行内时长 + #项目 + 实时回显 */}
+              <div className="flex items-start gap-2 rounded-2xl border-2 border-blue-400 bg-white px-3 py-2">
+                <textarea
+                  rows={1}
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={`任务… 1.5h #项目(可选)`}
+                  className="mt-0.5 min-h-[28px] w-full flex-1 resize-none border-none bg-transparent text-sm leading-7 outline-none placeholder:text-gray-400"
+                  onChange={(e) => {
+                    setTitle(e.target.value);
+                    e.target.style.height = "auto";
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 60)}px`;
+                  }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") {
+                    if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       void add();
                     }
                   }}
                 />
-                <Input
-                  placeholder="时长:1.5 / 1:30 / 90m"
-                  className="w-36"
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      void add();
-                    }
-                  }}
-                />
-                <Button size="sm" variant="primary" isDisabled={busy} onPress={() => void add()}>
-                  {busy ? <Spinner size="sm" /> : "添加"}
-                </Button>
+                <div className="flex shrink-0 flex-col items-end gap-1 pt-0.5">
+                  <Button size="sm" variant="primary" isDisabled={busy} onPress={() => void add()}>
+                    {busy ? <Spinner size="sm" /> : "记 ↵"}
+                  </Button>
+                  <div className="flex items-center gap-1 text-[11px] leading-none">
+                    <span className="text-gray-400">
+                      {active.find((p) => p.id === parsed.projectId)?.name ?? "…"}
+                    </span>
+                    {parsed.minutes > 0 && (
+                      <span className="rounded bg-blue-50 px-1.5 py-0.5 font-medium text-blue-600">
+                        {formatHours(parsed.minutes)}
+                      </span>
+                    )}
+                    {error && <span className="text-red-500">{error}</span>}
+                  </div>
+                </div>
               </div>
-              {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
 
               {dayEntries.length > 0 && (
                 <div className="mt-3 flex flex-col gap-1">
