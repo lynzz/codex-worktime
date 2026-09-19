@@ -149,7 +149,6 @@ function Composer({
   activeProjects: Project[];
   onDone: () => void;
 }) {
-  const [open, setOpen] = useState(true);
   const [projectId, setProjectId] = useState(activeProjects[0]?.id ?? "");
   const [raw, setRaw] = useState("");
   const [flash, setFlash] = useState("");
@@ -217,24 +216,7 @@ function Composer({
     el.style.height = `${Math.min(el.scrollHeight, 88)}px`;
   }
 
-  if (!open) {
-    return (
-      <div className="fixed inset-x-0 bottom-0 border-t border-gray-200 bg-white px-4 py-3 lg:pl-[248px]">
-        <div className="mx-auto max-w-2xl">
-          <button
-            className="w-full rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 py-2.5 text-sm text-gray-400 transition-colors hover:border-blue-300"
-            onClick={() => {
-              setOpen(true);
-              setTimeout(() => taRef.current?.focus(), 50);
-            }}
-          >
-            ⌨ 记一笔工时…
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+  // 始终展示,无需 open/close 状态
   const projName = activeProjects.find((p) => p.id === parsed.projectId)?.name ?? "";
 
   return (
@@ -267,13 +249,6 @@ function Composer({
             >
               {busy ? <Spinner size="sm" /> : "记 ↵"}
             </Button>
-            <button
-              className="text-xs text-gray-300 hover:text-gray-500"
-              aria-label="收起"
-              onClick={() => setOpen(false)}
-            >
-              ✕
-            </button>
           </div>
           {/* 实时解析回显:项目 · 时长 */}
           <div className="flex items-center gap-1 text-[11px] leading-none">
