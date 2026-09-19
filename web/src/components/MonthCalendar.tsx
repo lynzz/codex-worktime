@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Button, Chip, Input, Modal, Spinner } from "~/components/ui";
+import { Button, Chip, DatePicker, Input, Modal, Spinner } from "~/components/ui";
 import {
   dayOfWeekCN,
   formatHours,
@@ -283,6 +283,18 @@ function DayEntryModal({
                       />
                       <span className="flex-1 truncate">{e.title}</span>
                       <span className="font-semibold">{formatHours(e.minutes)}</span>
+                      <DatePicker
+                        ariaLabel="改日期"
+                        className="w-28 [&>span]:text-[11px]"
+                        value={e.date}
+                        onChange={(newDate) => {
+                          if (newDate !== e.date) {
+                            void api
+                              .patchEntry(e.id, { date: newDate })
+                              .then(onChanged);
+                          }
+                        }}
+                      />
                       <Button
                         size="sm"
                         variant="ghost"

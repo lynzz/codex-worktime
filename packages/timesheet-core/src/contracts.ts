@@ -68,6 +68,10 @@ export const entryPatchSchema = z
       .min(1, "时长必须大于 0")
       .max(24 * 60, "单条时长不能超过 24 小时")
       .optional(),
+    date: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "日期格式应为 YYYY-MM-DD")
+      .optional(),
     category: z.enum(CATEGORIES).nullable().optional(),
     note: z.string().trim().max(500).nullable().optional(),
   })
