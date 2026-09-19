@@ -27,7 +27,7 @@ function LoginPage() {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error ?? "登录失败");
       }
-      void navigate({ to: "/week", search: { date: undefined } as never });
+      void navigate({ to: "/home", search: { variant: "timeline" } });
     } catch (e) {
       setError((e as Error).message);
     } finally {

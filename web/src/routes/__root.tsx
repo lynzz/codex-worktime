@@ -37,9 +37,7 @@ export const Route = createRootRoute({
 
 const TITLES: Record<string, string> = {
   "/home": "今天",
-  "/week": "周网格",
-  "/day": "日清单",
-  "/month": "月日历",
+  "/month": "月历",
   "/projects": "项目与任务行",
   "/data": "导入导出",
 };

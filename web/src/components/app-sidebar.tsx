@@ -1,11 +1,9 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
-  CalendarDays,
   CalendarRange,
   Database,
   FolderKanban,
   MessageSquareText,
-  LayoutGrid,
   Timer,
 } from "lucide-react";
 import {
@@ -23,9 +21,7 @@ const NAV = [
     label: "工时记录",
     items: [
       { to: "/home", title: "今天", icon: MessageSquareText },
-      { to: "/week", title: "周网格", icon: LayoutGrid },
-      { to: "/day", title: "日清单", icon: CalendarDays },
-      { to: "/month", title: "月日历", icon: CalendarRange },
+      { to: "/month", title: "月历", icon: CalendarRange },
     ],
   },
   {

@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { useRouter } from "@tanstack/react-router";
 import { Card } from "~/components/ui";
 import {
   addDays,
@@ -11,7 +10,6 @@ import {
   todayKey,
 } from "@codex-worktime/timesheet-core";
 import { projectColor } from "~/lib/colors";
-import { QuickEntry } from "~/components/QuickEntry";
 import { useTotalHours } from "~/components/total-hours";
 import type { TimesheetData } from "~/lib/timesheet-route";
 
@@ -23,19 +21,12 @@ export function TimesheetShell({
   data: TimesheetData;
   children: React.ReactNode;
 }) {
-  const router = useRouter();
   const { set } = useTotalHours();
   useEffect(() => set(data.totalMinutes), [data.totalMinutes, set]);
-  const refresh = () => void router.invalidate();
 
   return (
     <div className="mx-auto max-w-5xl">
       <SummaryCards entries={data.entries} projects={data.projects.filter((p) => !p.archived)} />
-      <QuickEntry
-        projects={data.projects}
-        tasks={data.tasks}
-        onChanged={refresh}
-      />
       <div className="mt-4">{children}</div>
     </div>
   );

@@ -27,7 +27,7 @@ function MonthPage() {
           void router.navigate({ to: "/month", search: { date: d } })
         }
         onGotoDay={(d) =>
-          void router.navigate({ to: "/day", search: { date: d } })
+          void router.navigate({ to: "/home", search: { variant: "timeline" } })
         }
         onChanged={() => void router.invalidate()}
       />

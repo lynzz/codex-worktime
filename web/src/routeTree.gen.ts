@@ -11,12 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as DataRouteImport } from './routes/data'
-import { Route as DayRouteImport } from './routes/day'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MonthRouteImport } from './routes/month'
 import { Route as ProjectsRouteImport } from './routes/projects'
-import { Route as WeekRouteImport } from './routes/week'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -27,11 +25,6 @@ const IndexRoute = IndexRouteImport.update({
 const DataRoute = DataRouteImport.update({
   id: '/data',
   path: '/data',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DayRoute = DayRouteImport.update({
-  id: '/day',
-  path: '/day',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HomeRoute = HomeRouteImport.update({
@@ -54,11 +47,6 @@ const ProjectsRoute = ProjectsRouteImport.update({
   path: '/projects',
   getParentRoute: () => rootRouteImport,
 } as any)
-const WeekRoute = WeekRouteImport.update({
-  id: '/week',
-  path: '/week',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
   id: '/api/$',
   path: '/api/$',
@@ -68,82 +56,55 @@ const ApiSplatRoute = ApiSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/data': typeof DataRoute
-  '/day': typeof DayRoute
   '/home': typeof HomeRoute
   '/login': typeof LoginRoute
   '/month': typeof MonthRoute
   '/projects': typeof ProjectsRoute
-  '/week': typeof WeekRoute
   '/api/$': typeof ApiSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/data': typeof DataRoute
-  '/day': typeof DayRoute
   '/home': typeof HomeRoute
   '/login': typeof LoginRoute
   '/month': typeof MonthRoute
   '/projects': typeof ProjectsRoute
-  '/week': typeof WeekRoute
   '/api/$': typeof ApiSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/data': typeof DataRoute
-  '/day': typeof DayRoute
   '/home': typeof HomeRoute
   '/login': typeof LoginRoute
   '/month': typeof MonthRoute
   '/projects': typeof ProjectsRoute
-  '/week': typeof WeekRoute
   '/api/$': typeof ApiSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/'
-    | '/data'
-    | '/day'
-    | '/home'
-    | '/login'
-    | '/month'
-    | '/projects'
-    | '/week'
-    | '/api/$'
+    '/' | '/data' | '/home' | '/login' | '/month' | '/projects' | '/api/$'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/data'
-    | '/day'
-    | '/home'
-    | '/login'
-    | '/month'
-    | '/projects'
-    | '/week'
-    | '/api/$'
+  to: '/' | '/data' | '/home' | '/login' | '/month' | '/projects' | '/api/$'
   id:
     | '__root__'
     | '/'
     | '/data'
-    | '/day'
     | '/home'
     | '/login'
     | '/month'
     | '/projects'
-    | '/week'
     | '/api/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DataRoute: typeof DataRoute
-  DayRoute: typeof DayRoute
   HomeRoute: typeof HomeRoute
   LoginRoute: typeof LoginRoute
   MonthRoute: typeof MonthRoute
   ProjectsRoute: typeof ProjectsRoute
-  WeekRoute: typeof WeekRoute
   ApiSplatRoute: typeof ApiSplatRoute
 }
 
@@ -161,13 +122,6 @@ declare module '@tanstack/react-router' {
       path: '/data'
       fullPath: '/data'
       preLoaderRoute: typeof DataRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/day': {
-      id: '/day'
-      path: '/day'
-      fullPath: '/day'
-      preLoaderRoute: typeof DayRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/home': {
@@ -198,13 +152,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/week': {
-      id: '/week'
-      path: '/week'
-      fullPath: '/week'
-      preLoaderRoute: typeof WeekRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/$': {
       id: '/api/$'
       path: '/api/$'
@@ -218,12 +165,10 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DataRoute: DataRoute,
-  DayRoute: DayRoute,
   HomeRoute: HomeRoute,
   LoginRoute: LoginRoute,
   MonthRoute: MonthRoute,
   ProjectsRoute: ProjectsRoute,
-  WeekRoute: WeekRoute,
   ApiSplatRoute: ApiSplatRoute,
 }
 export const routeTree = rootRouteImport
