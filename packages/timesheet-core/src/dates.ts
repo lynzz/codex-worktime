@@ -42,14 +42,19 @@ export function sameMonth(a: string, b: string): boolean {
   return a.slice(0, 7) === b.slice(0, 7);
 }
 
-// 月历矩阵:以周一为首列的 42 天(6 行),非本月日期为空串
+// 月历矩阵:以周一为首列,非本月日期为空串;行数按需(5 或 6 周,去掉全空尾行)
 export function monthDays(anchor: string): string[] {
   const first = `${anchor.slice(0, 7)}-01`;
   const gridStart = startOfWeek(first);
-  return Array.from({ length: 42 }, (_, i) => {
+  const cells = Array.from({ length: 42 }, (_, i) => {
     const key = addDays(gridStart, i);
     return sameMonth(key, anchor) ? key : "";
   });
+  // 去掉尾部全空行(本月实际只占 5 周时,第 6 行全空)
+  while (cells.length > 35 && cells.slice(-7).every((c) => c === "")) {
+    cells.length -= 7;
+  }
+  return cells;
 }
 
 export function monthStart(anchor: string): string {

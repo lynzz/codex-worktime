@@ -3,9 +3,9 @@ import { formatHours, parseDurationInput } from "../src/duration";
 import { monthDays, nextMonthFirst } from "../src/dates";
 
 describe("monthDays(月历矩阵)", () => {
-  it("2026-09:9/1 为周二,恰 1 个前置空格;非本月为空、顺序连续", () => {
+  it("2026-09:9/1 为周二,恰 1 个前置空格;5 周行(尾空行已裁);非本月为空、顺序连续", () => {
     const grid = monthDays("2026-09-05");
-    expect(grid).toHaveLength(42);
+    expect(grid).toHaveLength(35); // 30 天只占 5 周,尾部全空行被裁
     expect(grid[0]).toBe("");
     expect(grid[1]).toBe("2026-09-01");
     expect(grid[30]).toBe("2026-09-30");

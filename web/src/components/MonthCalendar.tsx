@@ -102,7 +102,7 @@ export function MonthCalendar({
             </div>
           ))}
         </div>
-        <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px bg-gray-200">
+        <div className="grid min-h-0 flex-1 grid-cols-7 gap-px bg-gray-200">
           {grid.map((day, i) => {
             if (!day) return <div key={`empty-${i}`} className="bg-gray-50" />;
             const dayEntries = entries.filter((e) => e.date === day);
