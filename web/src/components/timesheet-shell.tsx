@@ -25,9 +25,9 @@ export function TimesheetShell({
   useEffect(() => set(data.totalMinutes), [data.totalMinutes, set]);
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto flex min-h-[calc(100vh-3.5rem-2rem)] max-w-[1400px] flex-col">
       <SummaryCards entries={data.entries} projects={data.projects.filter((p) => !p.archived)} />
-      <div className="mt-4">{children}</div>
+      <div className="mt-4 flex min-h-0 flex-1 flex-col">{children}</div>
     </div>
   );
 }

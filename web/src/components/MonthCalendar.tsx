@@ -53,7 +53,7 @@ export function MonthCalendar({
     .reduce((s, e) => s + e.minutes, 0);
 
   return (
-    <div className="mt-6 flex flex-col gap-3">
+    <div className="mt-6 flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="ghost" onPress={() => onDateChange(shiftMonth(date, -1))}>
           ← 上月
@@ -93,55 +93,74 @@ export function MonthCalendar({
         </span>
       </div>
 
-      <div className="grid grid-cols-7 gap-1.5">
-        {["周一", "周二", "周三", "周四", "周五", "周六", "周日"].map((d) => (
-          <div key={d} className="py-1 text-center text-xs text-gray-400">
-            {d}
-          </div>
-        ))}
-        {grid.map((day, i) => {
-          if (!day) return <div key={`empty-${i}`} />;
-          const dayEntries = entries.filter((e) => e.date === day);
-          const total = dayEntries.reduce((s, e) => s + e.minutes, 0);
-          return (
-            <button
-              key={day}
-              type="button"
-              onClick={() => {
-                setSelected(day);
-                setModalOpen(true);
-              }}
-              className={`min-h-20 rounded-lg border p-1.5 text-left align-top text-xs ${
-                day === selected
-                  ? "border-blue-500 ring-2 ring-blue-100"
-                  : "border-gray-200 hover:border-blue-300"
-              } ${isWeekend(day) ? "bg-gray-50/60" : "bg-white"} ${day === today ? "border-blue-400" : ""}`}
-            >
-              <div className="flex items-baseline justify-between">
-                <span className={day === today ? "font-bold text-blue-600" : "text-gray-400"}>
-                  {parseInt(day.slice(8), 10)}日
-                </span>
-                {total > 0 && (
-                  <span className="text-xs font-bold">{formatHours(total)}</span>
-                )}
-              </div>
-              <div className="mt-1 flex flex-col gap-0.5">
-                {dayEntries.map((e) => (
-                  <div key={e.id} className="flex items-center gap-1 truncate">
-                    <span
-                      className="h-1.5 w-1.5 shrink-0 rounded-full"
-                      style={{ background: projectColor(e.projectId) }}
-                    />
-                    <span className="truncate">{e.title}</span>
-                    <span className="ml-auto shrink-0 text-gray-400">
-                      {formatHours(e.minutes)}
+      {/* Teams 风格:日历占满剩余视口高度,行高自动拉伸 */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="grid shrink-0 grid-cols-7 border-b border-gray-200">
+          {["一", "二", "三", "四", "五", "六", "日"].map((d) => (
+            <div key={d} className="py-1.5 text-center text-xs font-medium text-gray-400">
+              {d}
+            </div>
+          ))}
+        </div>
+        <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-6 gap-px bg-gray-200">
+          {grid.map((day, i) => {
+            if (!day) return <div key={`empty-${i}`} className="bg-gray-50" />;
+            const dayEntries = entries.filter((e) => e.date === day);
+            const total = dayEntries.reduce((s, e) => s + e.minutes, 0);
+            return (
+              <button
+                key={day}
+                type="button"
+                onClick={() => {
+                  setSelected(day);
+                  setModalOpen(true);
+                }}
+                className={`flex min-h-0 flex-col overflow-hidden p-1.5 text-left text-xs transition-colors ${
+                  day === selected
+                    ? "bg-blue-50 ring-2 ring-inset ring-blue-500"
+                    : isWeekend(day)
+                      ? "bg-gray-50 hover:bg-blue-50/50"
+                      : "bg-white hover:bg-blue-50/50"
+                }`}
+              >
+                <div className="flex shrink-0 items-baseline justify-between">
+                  <span
+                    className={
+                      day === today
+                        ? "flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 font-bold text-white"
+                        : "text-gray-500"
+                    }
+                  >
+                    {parseInt(day.slice(8), 10)}
+                  </span>
+                  {total > 0 && (
+                    <span className="text-[11px] font-bold text-gray-600">
+                      {formatHours(total)}
                     </span>
-                  </div>
-                ))}
-              </div>
-            </button>
-          );
-        })}
+                  )}
+                </div>
+                <div className="mt-0.5 flex min-h-0 flex-1 flex-col gap-px overflow-hidden">
+                  {dayEntries.map((e) => (
+                    <div
+                      key={e.id}
+                      className="flex items-center gap-1 truncate rounded px-0.5 leading-4.5"
+                      style={{ background: `${projectColor(e.projectId)}15` }}
+                    >
+                      <span
+                        className="h-1 w-1 shrink-0 rounded-full"
+                        style={{ background: projectColor(e.projectId) }}
+                      />
+                      <span className="truncate text-[11px] text-gray-700">{e.title}</span>
+                      <span className="ml-auto shrink-0 text-[10px] text-gray-400">
+                        {formatHours(e.minutes)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <DayEntryModal
