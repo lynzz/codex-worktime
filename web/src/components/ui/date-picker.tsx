@@ -42,9 +42,10 @@ export function DatePicker({
         <span className={value ? "" : "text-gray-400"}>{value || "选择日期"}</span>
         <CalendarIcon className="h-3.5 w-3.5 text-gray-400" />
       </BasePopover.Trigger>
-      <BasePopover.Portal>
-        <BasePopover.Positioner sideOffset={6} className="z-50 outline-none">
-          <BasePopover.Popup className="w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-lg animate-zoom-in">
+      {/* 不用 Portal:portal 到 body 会与 Dialog(Modal)的 portal 冲突导致弹层不渲染;
+          去掉后弹层原地绝对定位,在 Modal 内外都能正常弹出 */}
+      <BasePopover.Positioner sideOffset={6} className="absolute z-[60] outline-none">
+        <BasePopover.Popup className="w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-lg animate-zoom-in">
             <div className="mb-2 flex items-center justify-between">
               <button
                 type="button"
@@ -126,7 +127,6 @@ export function DatePicker({
             </div>
           </BasePopover.Popup>
         </BasePopover.Positioner>
-      </BasePopover.Portal>
     </BasePopover.Root>
   );
 }
