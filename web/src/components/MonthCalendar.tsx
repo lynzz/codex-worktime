@@ -309,12 +309,14 @@ function DayEntryModal({
                       />
                       <span className="flex-1 truncate">{e.title}</span>
                       <span className="font-semibold">{formatHours(e.minutes)}</span>
-                      <DatePicker
-                        ariaLabel="改日期"
-                        className="w-28 [&>span]:text-[11px]"
+                      <input
+                        type="date"
+                        aria-label="改日期"
+                        className="h-6 rounded border-none bg-transparent text-[11px] text-gray-500 outline-none focus:text-gray-900"
                         value={e.date}
-                        onChange={(newDate) => {
-                          if (newDate !== e.date) {
+                        onChange={(ev) => {
+                          const newDate = ev.target.value;
+                          if (newDate && newDate !== e.date) {
                             void api
                               .patchEntry(e.id, { date: newDate })
                               .then(onChanged);
