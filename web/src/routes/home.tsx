@@ -149,7 +149,7 @@ function Composer({
   activeProjects: Project[];
   onDone: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const [projectId, setProjectId] = useState(activeProjects[0]?.id ?? "");
   const [raw, setRaw] = useState("");
   const [flash, setFlash] = useState("");
