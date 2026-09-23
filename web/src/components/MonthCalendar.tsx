@@ -303,24 +303,46 @@ function DayEntryModal({
               </div>
 
               {dayEntries.length > 0 && (
-                <div className="mt-3 flex flex-col gap-1">
+                <div className="mt-3 flex flex-col gap-1.5">
                   {dayEntries.map((e) => (
                     <div key={e.id} className="flex items-center gap-2 text-sm">
                       <span
                         className="h-2 w-2 shrink-0 rounded-full"
                         style={{ background: projectColor(e.projectId) }}
                       />
-                      <span className="flex-1 truncate">{e.title}</span>
-                      <span className="font-semibold">{formatHours(e.minutes)}</span>
+                      <input
+                        aria-label="任务标题"
+                        className="min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-sm hover:border-gray-200 focus:border-blue-500 focus:bg-white focus:outline-none"
+                        defaultValue={e.title}
+                        onBlur={(ev) => {
+                          const t = ev.target.value.trim();
+                          if (t && t !== e.title) {
+                            void api.patchEntry(e.id, { title: t }).then(onChanged);
+                          }
+                        }}
+                      />
+                      <input
+                        aria-label="时长(小时)"
+                        className="w-14 rounded-md border border-transparent px-1 py-0.5 text-center text-sm font-semibold tabular-nums hover:border-gray-200 focus:border-blue-500 focus:bg-white focus:outline-none"
+                        inputMode="decimal"
+                        defaultValue={Math.round((e.minutes / 60) * 100) / 100 || ""}
+                        title="支持 1.5 / 1:30 / 90m"
+                        onBlur={(ev) => {
+                          const raw = ev.target.value.trim();
+                          if (!raw) return;
+                          const mins = parseDurationInput(raw);
+                          if (mins && mins > 0 && mins !== e.minutes) {
+                            void api.patchEntry(e.id, { minutes: mins }).then(onChanged);
+                          }
+                        }}
+                      />
                       <DatePicker
                         ariaLabel="改日期"
                         className="h-6 w-28 text-[11px]"
                         value={e.date}
                         onChange={(newDate) => {
                           if (newDate && newDate !== e.date) {
-                            void api
-                              .patchEntry(e.id, { date: newDate })
-                              .then(onChanged);
+                            void api.patchEntry(e.id, { date: newDate }).then(onChanged);
                           }
                         }}
                       />
