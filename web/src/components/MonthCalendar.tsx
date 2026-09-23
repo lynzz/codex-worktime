@@ -68,6 +68,9 @@ export function MonthCalendar({
         )}
         <span className="ml-auto flex flex-wrap items-center gap-1.5 text-sm text-gray-500">
           本月合计 <b className="text-gray-900">{formatHours(monthTotal)}</b>
+          <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-semibold text-green-700">
+            ¥{Math.round((monthTotal / 60 / 8) * 1200).toLocaleString()}
+          </span>
           {active.map((p) => {
             const pm = entries
               .filter(
