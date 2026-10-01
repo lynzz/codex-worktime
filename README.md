@@ -88,7 +88,7 @@ npm run serve          # = codex-worktime manual serve; PORT / --port override
 npm run dev:web
 ```
 
-Three coequal views share one dataset: 周网格 (task-row × day grid, whole-cell replace), 日清单 (per-day entry list), 月历 (flat month overview with quick add). Hours accept `1.5` / `1:30` / `90m` / `1h30`. The 导出 XLSX button produces the EQA 平台任务清单 settlement workbook (tasks aggregated per project+title, live 150 元/人时 cost formulas, P0/P1 summary); 导出 JSON dumps raw data.
+Three coequal views share one dataset: 周网格 (task-row × day grid, whole-cell replace), 日清单 (per-day entry list), 月历 (flat month overview with quick add). Hours accept `1.5` / `1:30` / `90m` / `1h30`. The 导出 XLSX button produces the EQA 平台任务清单 settlement workbook (rows sorted by date ascending, live 150 元/人时 cost formulas, bottom 合计 row with total hours and total cost). The 日期列填入日期 switch (`fillDates=1|0`) picks the grain: on → one row per date+project+title with the date filled; off → one row per project+title with the date column left blank; 导出 JSON dumps raw data.
 
 Migrate recorded hours from the throwaway prototype:
 

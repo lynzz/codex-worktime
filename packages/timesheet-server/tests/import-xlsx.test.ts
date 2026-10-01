@@ -27,13 +27,13 @@ describe.skipIf(!hasTestDb)("POST /api/import/xlsx(模板导出→导回闭环)"
     });
   });
 
-  it("导出 XLSX → 清库 → 导回:项目/任务行/条目按所选日期重建", async () => {
+  it("导出 XLSX → 清库 → 导回:项目/任务行/条目按导出日期列原样重建", async () => {
     // 导出(全量)
     const exported = await api.request("/api/export/xlsx");
     expect(exported.status).toBe(200);
     const buffer = await exported.arrayBuffer();
 
-    // 清库后导回到指定日期
+    // 清库后导回(导出带日期列,默认日期不生效)
     await getDb().execute(sql`truncate table entries, tasks, projects cascade`);
 
     const imported = await api.request("/api/import/xlsx?date=2026-09-10", {
@@ -63,10 +63,12 @@ describe.skipIf(!hasTestDb)("POST /api/import/xlsx(模板导出→导回闭环)"
     ]);
     const entryRows = await getDb().select().from(entries);
     expect(entryRows).toHaveLength(2);
-    expect(entryRows.every((e) => e.date === "2026-09-10")).toBe(true);
     expect(entryRows.every((e) => e.taskId !== null)).toBe(true);
     const cert = entryRows.find((e) => e.title === "生成证书联调")!;
+    expect(cert.date).toBe("2026-09-04");
     expect(cert.minutes).toBe(180);
+    const dict = entryRows.find((e) => e.title === "微生物字典 UI 调试")!;
+    expect(dict.date).toBe("2026-09-05");
 
     // 再导一次同文件:同数值条目全部跳过(防手滑双导)
     const again = await api.request("/api/import/xlsx?date=2026-09-10", {

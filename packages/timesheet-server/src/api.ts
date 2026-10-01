@@ -94,10 +94,14 @@ function resolveExportRange(c: { req: { query: (k: string) => string | undefined
   return { label: "all" };
 }
 
-// 按 EQA 平台任务清单模板导出 XLSX(聚合口径:项目+任务)
+// 按 EQA 平台任务清单模板导出 XLSX(按日期升序);?fillDates=0 时日期列留空、按 项目+任务 合并
 api.get("/api/export/xlsx", async (c) => {
   const range = resolveExportRange(c);
   if ("error" in range) return range.error;
+  const fillDatesParam = c.req.query("fillDates") ?? "1";
+  if (fillDatesParam !== "0" && fillDatesParam !== "1") {
+    return c.json({ error: "fillDates 应为 0 或 1" }, 400);
+  }
 
   const db = getDb();
   const conditions = [];
@@ -111,7 +115,9 @@ api.get("/api/export/xlsx", async (c) => {
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(asc(entriesTable.date)),
   ]);
-  const buffer = await buildTaskListWorkbook(aggregateTaskRows(projects, entries as unknown as Entry[]));
+  const buffer = await buildTaskListWorkbook(
+    aggregateTaskRows(projects, entries as unknown as Entry[], { fillDates: fillDatesParam === "1" }),
+  );
   c.header(
     "content-disposition",
     `attachment; filename="task-list-${range.label}.xlsx"; filename*=UTF-8''${encodeURIComponent(`工时任务清单_${range.label}`)}.xlsx`,

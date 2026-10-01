@@ -9,3 +9,5 @@ export { Card } from "./card";
 export { Spinner } from "./spinner";
 export { Tooltip } from "./tooltip";
 export { DatePicker } from "./date-picker";
+export { MonthPicker } from "./month-picker";
+export { Switch } from "./switch";
