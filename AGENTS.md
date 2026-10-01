@@ -11,3 +11,7 @@ Uses the default five canonical triage labels. See `docs/agents/triage-labels.md
 ### Domain docs
 
 Uses a single-context layout. See `docs/agents/domain.md`.
+
+### Browser
+
+Browser work (UI smoke checks, page inspection, screenshots) runs in ego lite via the `ego-browser` skill.
