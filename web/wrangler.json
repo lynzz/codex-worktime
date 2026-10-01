@@ -1,0 +1,11 @@
+{
+  "name": "gongshi-suji",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./.output/public",
+    "binding": "ASSETS"
+  },
+  "main": "./.output/server/index.mjs",
+  "account_id": "17c475e5c95ded098ac47f207825c3b6"
+}

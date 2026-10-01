@@ -14,6 +14,9 @@ Codex Worktime is a local tool for creating auditable reports of Codex usage for
 - **Confidence**: The high, medium, or low strength of an Attribution Evidence claim.
 - **Coverage**: Whether the tool has enough retained metadata to report a period. `available` means matching metadata was observed; `no-data` means a readable source covered the date but had no matching project metadata; `unknown` means the available sources cannot establish the date's coverage. Neither `no-data` nor `unknown` means zero hours.
 - **Event completeness**: Whether an individual event sequence has the boundaries required to create a verified interval. It is separate from period-level Coverage.
+- **Human-declared Entry**: A user-recorded timesheet row for one calendar day (`{ date, projectId, title, minutes, taskId?, category?, note? }`). It is day-granular with no start/end times, lives in the Neon-hosted manual timesheet store, and is never merged into Active or Run Interval totals (ADR-0003).
+- **Task Row**: A pre-configured (project, task title) pair pinned as a week-grid row. Entries link to it by id while keeping a title snapshot; deleting a Task Row preserves its entries.
+- **Ad-hoc Entry**: A Human-declared Entry not linked to any Task Row, aggregated for display by project + title so that no recorded data disappears.
 
 ## V1 boundary
 

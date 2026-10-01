@@ -74,3 +74,39 @@ npm start -- data delete \
   --retained-export /absolute/path/to/exported-report.html \
   --confirm DELETE_LOCAL_DATA
 ```
+
+## Manual timesheet (human-declared hours)
+
+A local web app for recording outsourced, human-declared work hours by day — a separate data domain from the AI-time accounting above (ADR-0003); the two are never merged. Data lives in a Neon serverless Postgres project; the connection string is expected in `.env.local` at the repo root (`DATABASE_URL`, `DATABASE_URL_UNPOOLED`, written by `neon link`).
+
+```sh
+# One-time: build the web app, then start it on http://localhost:8787
+npm run build -w @codex-worktime/web
+npm run serve          # = codex-worktime manual serve; PORT / --port override
+
+# Day-to-day development with hot reload
+npm run dev:web
+```
+
+Three coequal views share one dataset: 周网格 (task-row × day grid, whole-cell replace), 日清单 (per-day entry list), 月历 (flat month overview with quick add). Hours accept `1.5` / `1:30` / `90m` / `1h30`. The 导出 XLSX button produces the EQA 平台任务清单 settlement workbook (tasks aggregated per project+title, live 150 元/人时 cost formulas, P0/P1 summary); 导出 JSON dumps raw data.
+
+Migrate recorded hours from the throwaway prototype:
+
+```sh
+npm run analyzer -- manual import /path/to/timesheet.PROTOTYPE-WIPE-ME.json
+# → {"projects":{"inserted":N,"skipped":0},"tasks":{...},"entries":{...}}; re-running skips everything
+```
+
+Backup/reset for this domain are in-app export and the double-confirmed 清空 button in the ⚙ panel; `data backup`/`data delete` still manage only the local AI-event store.
+
+## Deploy (Cloudflare Workers)
+
+```sh
+cd web
+DEPLOY_TARGET=cloudflare npx vite build
+CLOUDFLARE_API_TOKEN=... npx wrangler deploy   # DATABASE_URL 已在 worker secret
+```
+
+Live: https://gongshi-suji.lynzz168.workers.dev
+Auth plan: Cloudflare Access on a custom domain (requires enabling Zero
+Trust + a zone; workers.dev cannot be protected by Access policies).

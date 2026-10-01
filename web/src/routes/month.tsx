@@ -1,0 +1,35 @@
+import { RouteErrorBoundary } from "~/components/route-error";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { MonthCalendar } from "~/components/MonthCalendar";
+import { loadTimesheet, searchSchema } from "~/lib/timesheet-route";
+
+export const Route = createFileRoute("/month")({
+  errorComponent: RouteErrorBoundary,
+  validateSearch: (search) => searchSchema.parse(search),
+  loaderDeps: ({ search: { date } }) => ({ date }),
+  loader: ({ deps: { date } }) => loadTimesheet({ data: { date } }),
+  component: MonthPage,
+});
+
+function MonthPage() {
+  const data = Route.useLoaderData();
+  const { date } = Route.useSearch();
+  const router = useRouter();
+
+  return (
+    <div className="mx-auto flex min-h-[calc(100vh-3.5rem-3rem)] max-w-[1400px] flex-col">
+      <MonthCalendar
+        date={date}
+        projects={data.projects}
+        entries={data.entries}
+        onDateChange={(d) =>
+          void router.navigate({ to: "/month", search: { date: d } })
+        }
+        onGotoDay={(d) =>
+          void router.navigate({ to: "/home", search: { variant: "timeline" } })
+        }
+        onChanged={() => void router.invalidate()}
+      />
+    </div>
+  );
+}

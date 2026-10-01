@@ -1,0 +1,169 @@
+import { useMemo, useState } from "react";
+import { Button, Chip, Input, Spinner, DatePicker } from "~/components/ui";
+import {
+  addDays,
+  dayOfWeekCN,
+  formatHours,
+  parseDurationInput,
+  todayKey,
+  type Entry,
+  type Project,
+} from "@codex-worktime/timesheet-core";
+import { api } from "~/lib/api";
+import { projectColor } from "~/lib/colors";
+
+export function DayList({
+  date,
+  projects,
+  entries,
+  onDateChange,
+  onChanged,
+}: {
+  date: string;
+  projects: Project[];
+  entries: Entry[];
+  onDateChange: (date: string) => void;
+  onChanged: () => void;
+}) {
+  const active = projects.filter((p) => !p.archived);
+  const [error, setError] = useState("");
+
+  const dayEntries = useMemo(
+    () =>
+      entries
+        .filter((e) => e.date === date)
+        .slice()
+        .sort((a, b) => a.title.localeCompare(b.title, "zh")),
+    [entries, date],
+  );
+  const dayTotal = dayEntries.reduce((s, e) => s + e.minutes, 0);
+
+  async function run(action: () => Promise<unknown>) {
+    setError("");
+    try {
+      await action();
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  return (
+    <div className="mt-6 flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="ghost" onPress={() => onDateChange(addDays(date, -1))}>
+          ← 前一天
+        </Button>
+        <DatePicker ariaLabel="日期" value={date} onChange={onDateChange} />
+        <Button size="sm" variant="ghost" onPress={() => onDateChange(addDays(date, 1))}>
+          后一天 →
+        </Button>
+        {date !== todayKey() && (
+          <Button size="sm" variant="tertiary" onPress={() => onDateChange(todayKey())}>
+            今天
+          </Button>
+        )}
+        <span className="ml-auto text-sm font-semibold">
+          {date} {dayOfWeekCN(date)} · 合计 {formatHours(dayTotal)}
+        </span>
+      </div>
+
+
+      <table
+        aria-label="当日条目"
+        className="w-full rounded-xl bg-white text-sm"
+      >
+        <thead>
+          <tr className="border-b border-zinc-200 text-left text-xs text-zinc-400">
+            <th className="py-1.5 pr-2">项目</th>
+            <th className="py-1.5 pr-2">任务标题</th>
+            <th className="py-1.5 pr-2">时长</th>
+            <th className="py-1.5 pr-2">类别</th>
+            <th className="py-1.5 pr-2">备注</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {dayEntries.map((e) => (
+            <tr key={e.id} className="border-b border-zinc-100">
+              <td className="py-1.5 pr-2">
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ background: projectColor(e.projectId) }}
+                  />
+                  {projects.find((p) => p.id === e.projectId)?.name ?? "(已删除项目)"}
+                </span>
+              </td>
+              <td className="py-1 pr-2">
+                <Input
+                  aria-label="任务标题"
+                  className="w-full min-w-40"
+                  defaultValue={e.title}
+                  onBlur={(ev) => {
+                    const t = ev.target.value.trim();
+                    if (t && t !== e.title) run(() => api.patchEntry(e.id, { title: t }));
+                  }}
+                />
+              </td>
+              <td className="py-1 pr-2">
+                <Input
+                  aria-label="时长(小时)"
+                  className="w-16 text-center font-semibold"
+                  inputMode="decimal"
+                  defaultValue={
+                    Math.round((e.minutes / 60) * 100) / 100 || ""
+                  }
+                  title="支持 1.5 / 1:30 / 90m,失焦保存"
+                  onBlur={(ev) => {
+                    const raw = ev.target.value.trim();
+                    if (raw === "" || raw === String(Math.round((e.minutes / 60) * 100) / 100)) {
+                      if (raw === "") onChanged(); // 清空视为误触,回显
+                      return;
+                    }
+                    const minutes = parseDurationInput(raw);
+                    if (minutes === null || Number.isNaN(minutes) || minutes <= 0) {
+                      setError("时长格式:1.5 / 1:30 / 90m");
+                      onChanged(); // 回显服务器值
+                      return;
+                    }
+                    setError("");
+                    run(() => api.patchEntry(e.id, { minutes }));
+                  }}
+                />
+              </td>
+              <td className="py-1.5 pr-2">
+                {e.category ? (
+                  <Chip size="sm" variant="soft">
+                    {e.category}
+                  </Chip>
+                ) : (
+                  "—"
+                )}
+              </td>
+              <td className="py-1.5 pr-2">
+                <span className="block max-w-40 truncate text-zinc-500">{e.note ?? ""}</span>
+              </td>
+              <td className="py-1.5 text-right">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onPress={() => run(() => api.deleteEntry(e.id))}
+                >
+                  删除
+                </Button>
+              </td>
+            </tr>
+          ))}
+          {dayEntries.length === 0 && (
+            <tr>
+              <td colSpan={6} className="py-6 text-center text-zinc-400">
+                这一天还没有记录
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}

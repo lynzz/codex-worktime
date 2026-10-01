@@ -1,0 +1,185 @@
+import { useRef, useState } from "react";
+import { FileUp } from "lucide-react";
+import { Button, Spinner } from "~/components/ui";
+import { todayKey } from "@codex-worktime/timesheet-core";
+
+type Count = { inserted?: number; skipped?: number; created?: number; existing?: number };
+
+// 导入:JSON(原型/本应用导出,按 id 幂等)或 任务清单模板 XLSX(导出→改→导回)
+export function ImportForm({ onChanged }: { onChanged: () => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [jsonPayload, setJsonPayload] = useState("");
+  const [preview, setPreview] = useState<{
+    projects: number;
+    tasks: number;
+    entries: number;
+  } | null>(null);
+  const [result, setResult] = useState<string[] | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const isExcel = file?.name.toLowerCase().endsWith(".xlsx") ?? false;
+
+  function reset() {
+    setFile(null);
+    setJsonPayload("");
+    setPreview(null);
+    setResult(null);
+    setError("");
+  }
+
+  async function pick(f: File) {
+    reset();
+    setFile(f);
+    if (f.name.toLowerCase().endsWith(".xlsx")) return; // 解析在服务端
+    try {
+      const text = await f.text();
+      const data = JSON.parse(text) as Record<string, unknown[] | undefined>;
+      setJsonPayload(text);
+      setPreview({
+        projects: data.projects?.length ?? 0,
+        tasks: data.tasks?.length ?? 0,
+        entries: data.entries?.length ?? 0,
+      });
+    } catch {
+      setError("不是有效的 JSON 文件");
+    }
+  }
+
+  async function doImport() {
+    if (!file) return;
+    setBusy(true);
+    setError("");
+    try {
+      let res: Response;
+      if (isExcel) {
+        res = await fetch(
+          `/api/import/xlsx?date=${todayKey()}`,
+          await file.arrayBuffer().then((buf) => ({
+            method: "POST",
+            headers: {
+              "content-type":
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            },
+            body: buf,
+          })),
+        );
+      } else {
+        res = await fetch("/api/import", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: jsonPayload,
+        });
+      }
+      const body = (await res.json()) as Record<string, Count> & { error?: string };
+      if (!res.ok) throw new Error(body.error ?? `导入失败(${res.status})`);
+      setResult(
+        (Object.entries(body) as [string, Count][])
+          .filter(([, v]) => typeof v === "object" && v !== null)
+          .map(([k, v]) => {
+            const parts = [
+              v.created !== undefined ? `新建 ${v.created}` : null,
+              v.existing !== undefined ? `已存在 ${v.existing}` : null,
+              v.inserted !== undefined ? `新增 ${v.inserted}` : null,
+              v.skipped !== undefined ? `跳过 ${v.skipped}` : null,
+            ].filter(Boolean);
+            const label = k === "projects" ? "项目" : k === "tasks" ? "任务行" : "条目";
+            return `${label}:${parts.join(" / ")}`;
+          }),
+      );
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".json,.xlsx,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void pick(f);
+                }}
+              />
+              <div
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragging(false);
+                  const f = e.dataTransfer.files?.[0];
+                  if (f) void pick(f);
+                }}
+                className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 transition-colors ${
+                  dragging
+                    ? "border-brand-400 bg-brand-50"
+                    : "border-zinc-200 bg-zinc-50/50 hover:border-zinc-300"
+                }`}
+              >
+                <FileUp className={`h-5 w-5 ${dragging ? "text-brand-500" : "text-zinc-300"}`} />
+                <p className="text-sm text-zinc-500">
+                  {dragging ? "松开即可导入" : "拖拽 JSON / XLSX 文件到此处"}
+                </p>
+                <div className="mt-1 flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => inputRef.current?.click()}
+                  >
+                    选择文件…
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onPress={() => {
+                      window.location.href = "/api/import/template";
+                    }}
+                  >
+                    下载模板
+                  </Button>
+                </div>
+              </div>
+
+              {file && <p className="mt-2 text-sm text-zinc-500">{file.name}</p>}
+        
+              {preview && !result && (
+                <p className="mt-1 text-sm">
+                  将导入:项目 {preview.projects}、任务行 {preview.tasks}、
+                  条目 {preview.entries}(已存在的按 id 跳过)
+                </p>
+              )}
+              {result && (
+                <div className="mt-2 text-sm">
+                  {result.map((line) => (
+                    <p key={line}>{line}</p>
+                  ))}
+                </div>
+              )}
+              {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+              <p className="mt-2 text-xs text-zinc-400">
+                支持 JSON(原型数据 / 本应用导出,按 id 幂等)与 任务清单模板
+                XLSX(按 项目+任务 建档;工时按行内日期列落账,留空记到今天;重复导入同数值会跳过)
+              </p>
+      <Button
+        size="sm"
+        variant="primary"
+        className="self-start"
+        isDisabled={!file || busy}
+        onPress={() => void doImport()}
+      >
+        {busy ? <Spinner size="sm" /> : "导入"}
+      </Button>
+    </div>
+  );
+}
