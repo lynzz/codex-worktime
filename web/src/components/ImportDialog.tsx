@@ -123,12 +123,12 @@ export function ImportForm({ onChanged }: { onChanged: () => void }) {
                 }}
                 className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-6 transition-colors ${
                   dragging
-                    ? "border-blue-400 bg-blue-50"
-                    : "border-gray-200 bg-gray-50/50 hover:border-gray-300"
+                    ? "border-brand-400 bg-brand-50"
+                    : "border-zinc-200 bg-zinc-50/50 hover:border-zinc-300"
                 }`}
               >
-                <FileUp className={`h-5 w-5 ${dragging ? "text-blue-500" : "text-gray-300"}`} />
-                <p className="text-sm text-gray-500">
+                <FileUp className={`h-5 w-5 ${dragging ? "text-brand-500" : "text-zinc-300"}`} />
+                <p className="text-sm text-zinc-500">
                   {dragging ? "松开即可导入" : "拖拽 JSON / XLSX 文件到此处"}
                 </p>
                 <div className="mt-1 flex items-center gap-2">
@@ -151,7 +151,7 @@ export function ImportForm({ onChanged }: { onChanged: () => void }) {
                 </div>
               </div>
 
-              {file && <p className="mt-2 text-sm text-gray-500">{file.name}</p>}
+              {file && <p className="mt-2 text-sm text-zinc-500">{file.name}</p>}
         
               {preview && !result && (
                 <p className="mt-1 text-sm">
@@ -167,7 +167,7 @@ export function ImportForm({ onChanged }: { onChanged: () => void }) {
                 </div>
               )}
               {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
-              <p className="mt-2 text-xs text-gray-400">
+              <p className="mt-2 text-xs text-zinc-400">
                 支持 JSON(原型数据 / 本应用导出,按 id 幂等)与 任务清单模板
                 XLSX(按 项目+任务 建档;工时按行内日期列落账,留空记到今天;重复导入同数值会跳过)
               </p>

@@ -27,7 +27,7 @@ function ProjectsPage() {
           />
         </Card.Content>
       </Card>
-      <p className="mt-3 text-xs text-gray-400">
+      <p className="mt-3 text-xs text-zinc-400">
         任务行按住 ⣿ 把手拖动排序;周网格行序按此顺序渲染 · {todayKey()}
       </p>
     </div>

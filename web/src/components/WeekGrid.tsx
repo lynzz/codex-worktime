@@ -17,7 +17,7 @@ import { api } from "~/lib/api";
 import { projectColor } from "~/lib/colors";
 
 const cellInputCls =
-  "w-16 rounded border border-transparent bg-transparent text-center text-sm outline-none hover:border-gray-200 focus:border-blue-500 focus:bg-white";
+  "w-16 rounded border border-transparent bg-transparent text-center text-sm outline-none hover:border-zinc-200 focus:border-brand-500 focus:bg-white";
 
 function hoursInputValue(minutes: number): string {
   return String(Math.round((minutes / 60) * 100) / 100);
@@ -104,7 +104,7 @@ export function WeekGrid({
             本周
           </Button>
         )}
-        <span className="ml-auto text-xs text-gray-400">
+        <span className="ml-auto text-xs text-zinc-400">
           格子敲小时数(1.5 / 1:30 / 90m),回车或 Tab 跳格,清空即删除
         </span>
       </div>
@@ -113,16 +113,16 @@ export function WeekGrid({
         <table className="min-w-[840px] border-collapse text-sm">
           <thead>
             <tr>
-              <th className="w-32 border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-500">
+              <th className="w-32 border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs font-semibold text-zinc-500">
                 项目
               </th>
-              <th className="w-44 border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-500">
+              <th className="w-44 border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs font-semibold text-zinc-500">
                 任务
               </th>
               {days.map((d) => (
                 <th
                   key={d}
-                  className={`cursor-pointer border border-gray-200 px-1 py-1 text-xs font-semibold text-gray-500 hover:text-blue-600 ${d === today ? "bg-blue-50" : "bg-gray-50"}`}
+                  className={`cursor-pointer border border-zinc-200 px-1 py-1 text-xs font-semibold text-zinc-500 hover:text-brand-600 ${d === today ? "bg-brand-50" : "bg-zinc-50"}`}
                   onClick={() => onGotoDay(d)}
                   title={`在日清单中查看 ${d}`}
                 >
@@ -132,7 +132,7 @@ export function WeekGrid({
                   {d === today ? " ·今天" : ""}
                 </th>
               ))}
-              <th className="border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-semibold text-gray-500">
+              <th className="border border-zinc-200 bg-zinc-50 px-2 py-1 text-xs font-semibold text-zinc-500">
                 周合计
               </th>
             </tr>
@@ -149,8 +149,8 @@ export function WeekGrid({
                 );
               }, 0);
               return (
-                <tr key={`${row.projectId}|${row.taskId ?? row.title ?? ""}`} className={row.adhoc ? "text-gray-400" : ""}>
-                  <td className="border border-gray-200 px-2 py-1">
+                <tr key={`${row.projectId}|${row.taskId ?? row.title ?? ""}`} className={row.adhoc ? "text-zinc-400" : ""}>
+                  <td className="border border-zinc-200 px-2 py-1">
                     <span className="inline-flex items-center gap-1.5">
                       <span
                         className="h-2 w-2 rounded-full"
@@ -159,11 +159,11 @@ export function WeekGrid({
                       {projectName(row.projectId)}
                     </span>
                   </td>
-                  <td className="border border-gray-200 px-2 py-1">
+                  <td className="border border-zinc-200 px-2 py-1">
                     {row.adhoc ? (
                       <span>
                         {row.title ?? "(未命名)"}{" "}
-                        <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs">散录</span>
+                        <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-xs">散录</span>
                       </span>
                     ) : (
                       row.title
@@ -175,7 +175,7 @@ export function WeekGrid({
                     return (
                       <td
                         key={d}
-                        className={`border border-gray-200 p-0.5 text-center ${d === today ? "bg-blue-50/60" : ""}`}
+                        className={`border border-zinc-200 p-0.5 text-center ${d === today ? "bg-brand-50/60" : ""}`}
                       >
                         <input
                           className={cellInputCls}
@@ -204,7 +204,7 @@ export function WeekGrid({
                               <button
                                 type="button"
                                 tabIndex={-1}
-                                className="ml-0.5 align-super text-[10px] text-gray-400"
+                                className="ml-0.5 align-super text-[10px] text-zinc-400"
                               >
                                 ×{cellEntries.length}
                               </button>
@@ -219,7 +219,7 @@ export function WeekGrid({
                       </td>
                     );
                   })}
-                  <td className="border border-gray-200 px-2 py-1 text-center font-semibold">
+                  <td className="border border-zinc-200 px-2 py-1 text-center font-semibold">
                     {rowTotal ? formatHours(rowTotal) : ""}
                   </td>
                 </tr>
@@ -227,7 +227,7 @@ export function WeekGrid({
             })}
             {rows.length === 0 && (
               <tr>
-                <td colSpan={10} className="border border-gray-200 py-6 text-center text-gray-400">
+                <td colSpan={10} className="border border-zinc-200 py-6 text-center text-zinc-400">
                   还没有任务行,在「项目 ⚙」里添加;未挂任务行的记录会以散录行出现
                 </td>
               </tr>
@@ -235,7 +235,7 @@ export function WeekGrid({
           </tbody>
           <tfoot>
             <tr>
-              <th colSpan={2} className="border border-gray-200 bg-gray-50 px-2 py-1 text-left text-xs font-semibold text-gray-500">
+              <th colSpan={2} className="border border-zinc-200 bg-zinc-50 px-2 py-1 text-left text-xs font-semibold text-zinc-500">
                 日合计
               </th>
               {days.map((d) => {
@@ -243,12 +243,12 @@ export function WeekGrid({
                   .filter((e) => e.date === d)
                   .reduce((s, e) => s + e.minutes, 0);
                 return (
-                  <td key={d} className="border border-gray-200 px-1 py-1 text-center text-xs font-semibold">
+                  <td key={d} className="border border-zinc-200 px-1 py-1 text-center text-xs font-semibold">
                     {t ? formatHours(t) : ""}
                   </td>
                 );
               })}
-              <td className="border border-gray-200 bg-gray-50 px-2 py-1 text-center text-xs font-bold">
+              <td className="border border-zinc-200 bg-zinc-50 px-2 py-1 text-center text-xs font-bold">
                 {formatHours(
                   days.reduce(
                     (s, d) =>

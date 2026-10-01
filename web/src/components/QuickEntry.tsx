@@ -52,7 +52,7 @@ export function QuickEntry({
   }
 
   return (
-    <div className="mt-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm transition-colors focus-within:border-blue-400">
+    <div className="mt-2 rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm transition-colors focus-within:border-brand-400">
       <TextArea
         aria-label="任务标题"
         placeholder="记一笔工时:在做什么…(Enter 发送)"
@@ -68,7 +68,7 @@ export function QuickEntry({
         }}
       />
 
-      <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2">
+      <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-2">
         <HeroSelect
           ariaLabel="快速记录项目"
           className="w-32"

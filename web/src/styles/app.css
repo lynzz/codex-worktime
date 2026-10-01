@@ -1,30 +1,43 @@
 @import "tailwindcss";
 
-/* shadcn 风格基础令牌(zinc 中性色 + 蓝色主色) */
-:root {
-  --background: hsl(0 0% 100%);
-  --foreground: oklch(0.21 0.006 285.89);
-  --muted: hsl(240 5% 96%);
-  --muted-foreground: oklch(0.552 0.016 285.94);
-  --border: hsl(240 5.9 90%);
-  --primary: oklch(0.55 0.2 262);
-  --primary-foreground: oklch(0.98 0 0);
-  --ring: oklch(0.55 0.2 262 / 15%);
-}
+/*
+ * 色彩体系(与钱相关):
+ * - brand:钞绿——主色,按钮/选中/进度;图标轨用 brand-950 墨绿。
+ *   50–400 取 emerald 同级,500 起整体深一级(brand-600 = emerald-700),
+ *   保证白字按钮与绿字链接对比度 ≥ 4.5:1。
+ * - money:金(amber 色阶)——只用于金额(¥)与品牌标识;金字一律 ≥ 700 级。
+ * - 中性色统一 zinc;危险操作保持 red;项目色按 id 哈希(lib/colors.ts)。
+ * 换主色只改这里的色阶值。
+ */
+@theme {
+  --color-brand-50: oklch(97.9% 0.021 166.113);
+  --color-brand-100: oklch(95% 0.052 163.051);
+  --color-brand-200: oklch(90.5% 0.093 164.15);
+  --color-brand-300: oklch(84.5% 0.143 164.978);
+  --color-brand-400: oklch(76.5% 0.177 163.223);
+  --color-brand-500: oklch(59.6% 0.145 163.225);
+  --color-brand-600: oklch(50.8% 0.118 165.612);
+  --color-brand-700: oklch(43.2% 0.095 166.913);
+  --color-brand-800: oklch(37.8% 0.077 168.94);
+  --color-brand-900: oklch(26.2% 0.051 172.552);
+  --color-brand-950: oklch(21% 0.042 172);
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-border: var(--border);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
+  --color-money-50: oklch(98.7% 0.022 95.277);
+  --color-money-100: oklch(96.2% 0.059 95.617);
+  --color-money-200: oklch(92.4% 0.12 95.746);
+  --color-money-300: oklch(87.9% 0.169 91.605);
+  --color-money-400: oklch(82.8% 0.189 84.429);
+  --color-money-500: oklch(76.9% 0.188 70.08);
+  --color-money-600: oklch(66.6% 0.179 58.318);
+  --color-money-700: oklch(55.5% 0.163 48.998);
+  --color-money-800: oklch(47.3% 0.137 46.201);
+  --color-money-900: oklch(41.4% 0.112 45.904);
+  --color-money-950: oklch(27.9% 0.077 45.635);
 }
 
 body {
-  background-color: var(--background); /* 白底 */
-  color: var(--foreground);
+  background-color: #fff;
+  color: oklch(21% 0.006 285.885); /* zinc-900 */
 }
 
 @keyframes fade-in {

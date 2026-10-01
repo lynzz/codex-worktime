@@ -31,8 +31,8 @@ function DataPage() {
         <Card.Header className="px-5 pt-4 text-sm font-semibold">导出</Card.Header>
         <Card.Content className="p-5 pt-3">
           <ExportForm />
-          <div className="mt-3 flex items-center gap-2 border-t border-gray-100 pt-3">
-            <span className="text-xs text-gray-400">原始数据</span>
+          <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3">
+            <span className="text-xs text-zinc-400">原始数据</span>
             <Button
               size="sm"
               variant="ghost"

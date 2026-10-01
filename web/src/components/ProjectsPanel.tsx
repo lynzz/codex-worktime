@@ -113,11 +113,11 @@ export function ProjectsContent({
               {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
               <div className="mt-3 flex flex-col gap-2">
                 {actives.length === 0 && archived.length === 0 && (
-                  <p className="text-sm text-gray-400">还没有项目</p>
+                  <p className="text-sm text-zinc-400">还没有项目</p>
                 )}
                 {actives.map((p) => row(p, false))}
                 {archived.length > 0 && (
-                  <p className="mt-2 text-xs text-gray-400">已归档</p>
+                  <p className="mt-2 text-xs text-zinc-400">已归档</p>
                 )}
                 {archived.map((p) => row(p, true))}
               </div>
@@ -130,8 +130,8 @@ export function ProjectsContent({
                 />
               )}
 
-              <div className="mt-5 flex items-center justify-between border-t border-gray-100 pt-3">
-                <span className="max-w-52 text-xs text-gray-400">
+              <div className="mt-5 flex items-center justify-between border-t border-zinc-100 pt-3">
+                <span className="max-w-52 text-xs text-zinc-400">
                   清空全部项目、任务行与工时记录(不可恢复,请先导出)
                 </span>
                 <Button
@@ -174,7 +174,7 @@ function TaskRowsSection({
   }
 
   return (
-    <div className="mt-5 border-t border-gray-100 pt-3">
+    <div className="mt-5 border-t border-zinc-100 pt-3">
       <p className="text-sm font-semibold">任务行(周网格常驻行)</p>
       <div className="mt-2 flex flex-wrap gap-2">
         <HeroSelect
@@ -202,7 +202,7 @@ function TaskRowsSection({
       </div>
       <div className="mt-3 flex flex-col gap-1.5">
         {tasks.length === 0 && (
-          <p className="text-sm text-gray-400">
+          <p className="text-sm text-zinc-400">
             还没有任务行;日清单里输入同名标题会自动关联
           </p>
         )}
@@ -277,11 +277,11 @@ function SortableTaskRow({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={`flex items-center gap-2 rounded-lg px-1 py-0.5 text-sm ${isDragging ? "z-10 bg-blue-50/80 shadow-md" : "bg-transparent"}`}
+      className={`flex items-center gap-2 rounded-lg px-1 py-0.5 text-sm ${isDragging ? "z-10 bg-brand-50/80 shadow-md" : "bg-transparent"}`}
     >
       <button
         type="button"
-        className="cursor-grab touch-none text-gray-300 hover:text-gray-500 active:cursor-grabbing"
+        className="cursor-grab touch-none text-zinc-300 hover:text-zinc-500 active:cursor-grabbing"
         aria-label="拖动排序"
         {...attributes}
         {...listeners}
@@ -292,7 +292,7 @@ function SortableTaskRow({
         className="h-2 w-2 shrink-0 rounded-full"
         style={{ background: projectColor(task.projectId) }}
       />
-      <span className="text-gray-500">
+      <span className="text-zinc-500">
         {actives.find((p) => p.id === task.projectId)?.name ?? "?"}
       </span>
       <Input

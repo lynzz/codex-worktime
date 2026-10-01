@@ -33,9 +33,9 @@ export const Select = Object.assign(
   {
     Trigger: function Trigger({ children }: { children?: React.ReactNode }) {
       return (
-        <BaseSelect.Trigger className="flex h-8 w-full items-center justify-between gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-900 outline-none transition-colors hover:border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+        <BaseSelect.Trigger className="flex h-8 w-full items-center justify-between gap-1 rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 outline-none transition-colors hover:border-zinc-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100">
           {children}
-          <BaseSelect.Icon className="text-gray-400">
+          <BaseSelect.Icon className="text-zinc-400">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M2.5 4.5L6 8L9.5 4.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
@@ -50,7 +50,7 @@ export const Select = Object.assign(
       return (
         <BaseSelect.Portal>
           <BaseSelect.Positioner sideOffset={6} className="z-50 outline-none">
-            <BaseSelect.Popup className="max-h-72 min-w-[8rem] overflow-y-auto rounded-xl border border-gray-200 bg-white p-1 shadow-lg animate-zoom-in">
+            <BaseSelect.Popup className="max-h-72 min-w-[8rem] overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg animate-zoom-in">
               {children}
             </BaseSelect.Popup>
           </BaseSelect.Positioner>
@@ -88,9 +88,9 @@ export function ListBoxItem({
       value={id ?? textValue ?? ""}
       label={textValue}
       className={cn(
-        "flex cursor-default select-none items-center rounded-md px-2 py-1.5 text-sm text-gray-700 outline-none",
-        "data-[highlighted]:bg-gray-100 data-[highlighted]:outline-none",
-        "data-[selected]:font-medium data-[selected]:text-gray-900",
+        "flex cursor-default select-none items-center rounded-md px-2 py-1.5 text-sm text-zinc-700 outline-none",
+        "data-[highlighted]:bg-zinc-100 data-[highlighted]:outline-none",
+        "data-[selected]:font-medium data-[selected]:text-zinc-900",
       )}
     >
       <BaseSelect.ItemText>{children}</BaseSelect.ItemText>

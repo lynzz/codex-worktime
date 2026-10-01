@@ -35,23 +35,23 @@ export function DatePicker({
       <BasePopover.Trigger
         aria-label={ariaLabel}
         className={cn(
-          "flex h-8 w-36 items-center justify-between gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-900 outline-none transition-colors hover:border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-100",
+          "flex h-8 w-36 items-center justify-between gap-1 rounded-lg border border-zinc-200 bg-white px-2.5 text-sm text-zinc-900 outline-none transition-colors hover:border-zinc-300 focus:border-brand-500 focus:ring-2 focus:ring-brand-100",
           className,
         )}
       >
-        <span className={value ? "" : "text-gray-400"}>{value || "选择日期"}</span>
-        <CalendarIcon className="h-3.5 w-3.5 text-gray-400" />
+        <span className={value ? "" : "text-zinc-400"}>{value || "选择日期"}</span>
+        <CalendarIcon className="h-3.5 w-3.5 text-zinc-400" />
       </BasePopover.Trigger>
       {/* 保留 Portal(去 Portal 会与 Positioner 的测量循环冲突→React #185);
           z-[70] 确保弹层在 Modal(z-50)之上可见 */}
       <BasePopover.Portal>
         <BasePopover.Positioner sideOffset={6} className="z-[70] outline-none">
-          <BasePopover.Popup className="w-64 rounded-xl border border-gray-200 bg-white p-3 shadow-lg animate-zoom-in">
+          <BasePopover.Popup className="w-64 rounded-xl border border-zinc-200 bg-white p-3 shadow-lg animate-zoom-in">
             <div className="mb-2 flex items-center justify-between">
               <button
                 type="button"
                 aria-label="上个月"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100"
                 onClick={() => {
                   const d = new Date(y!, (m ?? 1) - 2, 1);
                   setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
@@ -65,7 +65,7 @@ export function DatePicker({
               <button
                 type="button"
                 aria-label="下个月"
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-gray-500 hover:bg-gray-100"
+                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-zinc-500 hover:bg-zinc-100"
                 onClick={() => {
                   const d = new Date(y!, m ?? 1, 1);
                   setViewMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
@@ -76,7 +76,7 @@ export function DatePicker({
             </div>
             <div className="grid grid-cols-7 gap-0.5 text-center">
               {DOW.map((d) => (
-                <div key={d} className="py-1 text-xs text-gray-400">
+                <div key={d} className="py-1 text-xs text-zinc-400">
                   {d}
                 </div>
               ))}
@@ -91,10 +91,10 @@ export function DatePicker({
                     }}
                     className={cn(
                       "h-8 rounded-md text-sm transition-colors",
-                      "hover:bg-gray-100",
-                      day === value && "bg-blue-600 font-medium text-white hover:bg-blue-600",
-                      day === today && day !== value && "text-blue-600 font-medium",
-                      day !== value && day !== today && "text-gray-700",
+                      "hover:bg-zinc-100",
+                      day === value && "bg-brand-600 font-medium text-white hover:bg-brand-600",
+                      day === today && day !== value && "text-brand-600 font-medium",
+                      day !== value && day !== today && "text-zinc-700",
                     )}
                   >
                     {parseInt(day.slice(8), 10)}
@@ -104,10 +104,10 @@ export function DatePicker({
                 ),
               )}
             </div>
-            <div className="mt-2 flex justify-between border-t border-gray-100 pt-2">
+            <div className="mt-2 flex justify-between border-t border-zinc-100 pt-2">
               <button
                 type="button"
-                className="rounded-md px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                className="rounded-md px-2 py-1 text-xs text-brand-600 hover:bg-brand-50"
                 onClick={() => {
                   onChange(today);
                   setOpen(false);
@@ -117,7 +117,7 @@ export function DatePicker({
               </button>
               <button
                 type="button"
-                className="rounded-md px-2 py-1 text-xs text-gray-500 hover:bg-gray-100"
+                className="rounded-md px-2 py-1 text-xs text-zinc-500 hover:bg-zinc-100"
                 onClick={() => {
                   onChange(addDays(today, -1));
                   setOpen(false);

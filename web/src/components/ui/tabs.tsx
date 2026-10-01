@@ -32,7 +32,7 @@ export const Tabs = Object.assign(
     },
     List: function List({ children }: { children: React.ReactNode }) {
       return (
-        <BaseTabs.List className="inline-flex items-center gap-1 rounded-xl bg-gray-100/80 p-1">
+        <BaseTabs.List className="inline-flex items-center gap-1 rounded-xl bg-zinc-100/80 p-1">
           {children}
         </BaseTabs.List>
       );
@@ -42,9 +42,9 @@ export const Tabs = Object.assign(
         <BaseTabs.Tab
           value={id}
           className={cn(
-            "cursor-default select-none rounded-lg px-3 py-1 text-sm text-gray-500 outline-none transition-colors",
-            "hover:text-gray-700 aria-selected:bg-white aria-selected:text-gray-900 aria-selected:shadow-sm",
-            "focus-visible:ring-2 focus-visible:ring-blue-200",
+            "cursor-default select-none rounded-lg px-3 py-1 text-sm text-zinc-500 outline-none transition-colors",
+            "hover:text-zinc-700 aria-selected:bg-white aria-selected:text-zinc-900 aria-selected:shadow-sm",
+            "focus-visible:ring-2 focus-visible:ring-brand-200",
           )}
         >
           {children}

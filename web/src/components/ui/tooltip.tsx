@@ -19,7 +19,7 @@ export const Tooltip = Object.assign(
       return (
         <BaseTooltip.Portal>
           <BaseTooltip.Positioner sideOffset={6} className="z-50 outline-none">
-            <BaseTooltip.Popup className="max-w-72 whitespace-pre-wrap rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs leading-5 text-gray-50 shadow-lg animate-fade-in">
+            <BaseTooltip.Popup className="max-w-72 whitespace-pre-wrap rounded-lg bg-zinc-900 px-2.5 py-1.5 text-xs leading-5 text-zinc-50 shadow-lg animate-fade-in">
               {children}
             </BaseTooltip.Popup>
           </BaseTooltip.Positioner>

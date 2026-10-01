@@ -74,7 +74,7 @@ export function DayList({
         className="w-full rounded-xl bg-white text-sm"
       >
         <thead>
-          <tr className="border-b border-gray-200 text-left text-xs text-gray-400">
+          <tr className="border-b border-zinc-200 text-left text-xs text-zinc-400">
             <th className="py-1.5 pr-2">项目</th>
             <th className="py-1.5 pr-2">任务标题</th>
             <th className="py-1.5 pr-2">时长</th>
@@ -85,7 +85,7 @@ export function DayList({
         </thead>
         <tbody>
           {dayEntries.map((e) => (
-            <tr key={e.id} className="border-b border-gray-100">
+            <tr key={e.id} className="border-b border-zinc-100">
               <td className="py-1.5 pr-2">
                 <span className="inline-flex items-center gap-1.5">
                   <span
@@ -142,7 +142,7 @@ export function DayList({
                 )}
               </td>
               <td className="py-1.5 pr-2">
-                <span className="block max-w-40 truncate text-gray-500">{e.note ?? ""}</span>
+                <span className="block max-w-40 truncate text-zinc-500">{e.note ?? ""}</span>
               </td>
               <td className="py-1.5 text-right">
                 <Button
@@ -157,7 +157,7 @@ export function DayList({
           ))}
           {dayEntries.length === 0 && (
             <tr>
-              <td colSpan={6} className="py-6 text-center text-gray-400">
+              <td colSpan={6} className="py-6 text-center text-zinc-400">
                 这一天还没有记录
               </td>
             </tr>

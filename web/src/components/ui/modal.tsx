@@ -45,13 +45,13 @@ export const Modal = Object.assign(
       );
     },
     Header: function Header({ children }: { children: React.ReactNode }) {
-      return <div className="border-b border-gray-100 px-5 py-3 text-sm font-semibold">{children}</div>;
+      return <div className="border-b border-zinc-100 px-5 py-3 text-sm font-semibold">{children}</div>;
     },
     Body: function Body({ children }: { children: React.ReactNode }) {
       return <div className="p-5">{children}</div>;
     },
     Footer: function Footer({ children }: { children: React.ReactNode }) {
-      return <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-3">{children}</div>;
+      return <div className="flex justify-end gap-2 border-t border-zinc-100 px-5 py-3">{children}</div>;
     },
   },
 );

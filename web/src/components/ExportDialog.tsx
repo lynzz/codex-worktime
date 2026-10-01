@@ -74,12 +74,12 @@ export function ExportForm() {
               ) : (
                 <div className="mt-3 flex items-center gap-2">
                   <DatePicker ariaLabel="开始日期" value={from} onChange={setFrom} />
-                  <span className="text-sm text-gray-400">至</span>
+                  <span className="text-sm text-zinc-400">至</span>
                   <DatePicker ariaLabel="结束日期" value={to} onChange={setTo} />
                 </div>
               )}
               {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
-              <p className="mt-2 text-xs text-gray-400">
+              <p className="mt-2 text-xs text-zinc-400">
                 聚合口径:项目 + 任务;优先级默认 P1,导出后可在 Excel 中调整
               </p>
       <Button size="sm" variant="primary" className="self-start" onPress={download}>

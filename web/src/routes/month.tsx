@@ -1,7 +1,6 @@
 import { RouteErrorBoundary } from "~/components/route-error";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { MonthCalendar } from "~/components/MonthCalendar";
-import { TimesheetShell } from "~/components/timesheet-shell";
 import { loadTimesheet, searchSchema } from "~/lib/timesheet-route";
 
 export const Route = createFileRoute("/month")({
@@ -18,7 +17,7 @@ function MonthPage() {
   const router = useRouter();
 
   return (
-    <TimesheetShell data={data}>
+    <div className="mx-auto flex min-h-[calc(100vh-3.5rem-3rem)] max-w-[1400px] flex-col">
       <MonthCalendar
         date={date}
         projects={data.projects}
@@ -31,6 +30,6 @@ function MonthPage() {
         }
         onChanged={() => void router.invalidate()}
       />
-    </TimesheetShell>
+    </div>
   );
 }

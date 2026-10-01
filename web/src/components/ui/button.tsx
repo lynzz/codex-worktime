@@ -10,13 +10,13 @@ type Variant =
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800",
+    "bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800",
   secondary:
-    "bg-gray-100 text-gray-900 hover:bg-gray-200",
+    "bg-zinc-100 text-zinc-900 hover:bg-zinc-200",
   ghost:
-    "text-gray-700 hover:bg-gray-100",
+    "text-zinc-700 hover:bg-zinc-100",
   tertiary:
-    "text-blue-600 hover:bg-blue-50",
+    "text-brand-600 hover:bg-brand-50",
   "danger-soft":
     "text-red-600 bg-red-50 hover:bg-red-100",
 };
@@ -44,7 +44,7 @@ export function Button({
       disabled={isDisabled}
       onClick={onPress}
       className={cn(
-        "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-200",
+        "inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-brand-200",
         "disabled:pointer-events-none disabled:opacity-50",
         size === "sm" ? "h-7 px-2.5 text-xs" : "h-8 px-3 text-sm",
         variants[variant],

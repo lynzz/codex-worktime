@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Button, Input, Spinner } from "~/components/ui";
-import { Timer } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -36,14 +35,12 @@ function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50">
-      <div className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
+    <div className="flex min-h-screen items-center justify-center bg-zinc-50">
+      <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
         <div className="mb-6 flex flex-col items-center gap-2">
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-white">
-            <Timer className="h-5 w-5" />
-          </span>
+          <img src="/favicon.svg" alt="" className="h-11 w-11 rounded-[10px] shadow-sm" />
           <h1 className="text-lg font-semibold">工时速记</h1>
-          <p className="text-xs text-gray-400">请输入访问口令</p>
+          <p className="text-xs text-zinc-400">请输入访问口令</p>
         </div>
         <Input
           type="password"

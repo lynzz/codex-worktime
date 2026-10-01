@@ -5,9 +5,9 @@ import { Button } from "~/components/ui";
 export function RouteErrorBoundary({ error }: { error: Error }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <div className="mx-auto mt-16 max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+    <div className="mx-auto mt-16 max-w-md rounded-2xl border border-zinc-200 bg-white p-8 text-center shadow-sm">
       <p className="text-base font-semibold">页面加载失败</p>
-      <p className="mt-2 text-sm text-gray-500">
+      <p className="mt-2 text-sm text-zinc-500">
         {error.message.includes("fetch") || error.message.includes("加载数据")
           ? "连接数据库超时(跨境网络抖动),数据没有丢失。"
           : error.message}

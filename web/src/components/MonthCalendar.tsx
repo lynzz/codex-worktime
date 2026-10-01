@@ -14,6 +14,7 @@ import {
 } from "@codex-worktime/timesheet-core";
 import { api } from "~/lib/api";
 import { projectColor } from "~/lib/colors";
+import { laborCostYuan } from "~/lib/money";
 
 function monthLabel(anchor: string): string {
   const [y, m] = anchor.split("-").map(Number);
@@ -52,7 +53,7 @@ export function MonthCalendar({
     .reduce((s, e) => s + e.minutes, 0);
 
   return (
-    <div className="mt-6 flex min-h-0 flex-1 flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="ghost" onPress={() => onDateChange(shiftMonth(date, -1))}>
           ← 上月
@@ -66,10 +67,10 @@ export function MonthCalendar({
             本月
           </Button>
         )}
-        <span className="ml-auto flex flex-wrap items-center gap-1.5 text-sm text-gray-500">
-          本月合计 <b className="text-gray-900">{formatHours(monthTotal)}</b>
-          <span className="rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-semibold text-green-700">
-            ¥{Math.round((monthTotal / 60 / 8) * 1200).toLocaleString()}
+        <span className="ml-auto flex flex-wrap items-center gap-1.5 text-sm text-zinc-500">
+          本月合计 <b className="text-zinc-900">{formatHours(monthTotal)}</b>
+          <span className="rounded-full bg-money-50 px-2.5 py-0.5 text-xs font-semibold text-money-700">
+            ¥{laborCostYuan(monthTotal).toLocaleString()}
           </span>
           {active.map((p) => {
             const pm = entries
@@ -96,17 +97,17 @@ export function MonthCalendar({
       </div>
 
       {/* Teams 风格:日历占满剩余视口高度,行高自动拉伸;星期行+日格同一边框 */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-gray-200">
-        <div className="grid shrink-0 grid-cols-7 border-b border-gray-200 bg-gray-50">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-zinc-200">
+        <div className="grid shrink-0 grid-cols-7 border-b border-zinc-200 bg-zinc-50">
           {["一", "二", "三", "四", "五", "六", "日"].map((d) => (
-            <div key={d} className="py-1.5 text-center text-xs font-medium text-gray-400">
+            <div key={d} className="py-1.5 text-center text-xs font-medium text-zinc-400">
               {d}
             </div>
           ))}
         </div>
-        <div className="grid min-h-0 flex-1 grid-cols-7 gap-px bg-gray-200">
+        <div className="grid min-h-0 flex-1 grid-cols-7 gap-px bg-zinc-200">
           {grid.map((day, i) => {
-            if (!day) return <div key={`empty-${i}`} className="bg-gray-50" />;
+            if (!day) return <div key={`empty-${i}`} className="bg-zinc-50" />;
             const dayEntries = entries.filter((e) => e.date === day);
             const total = dayEntries.reduce((s, e) => s + e.minutes, 0);
             return (
@@ -119,24 +120,24 @@ export function MonthCalendar({
                 }}
                 className={`flex min-h-0 flex-col overflow-hidden p-1.5 text-left text-xs transition-colors ${
                   day === selected
-                    ? "bg-blue-50 ring-2 ring-inset ring-blue-500"
+                    ? "bg-brand-50 ring-2 ring-inset ring-brand-500"
                     : isWeekend(day)
-                      ? "bg-gray-50 hover:bg-blue-50/50"
-                      : "bg-white hover:bg-blue-50/50"
+                      ? "bg-zinc-50 hover:bg-brand-50/50"
+                      : "bg-white hover:bg-brand-50/50"
                 }`}
               >
                 <div className="flex shrink-0 items-baseline justify-between">
                   <span
                     className={
                       day === today
-                        ? "flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 font-bold text-white"
-                        : "text-gray-500"
+                        ? "flex h-5 w-5 items-center justify-center rounded-full bg-brand-600 font-bold text-white"
+                        : "text-zinc-500"
                     }
                   >
                     {parseInt(day.slice(8), 10)}
                   </span>
                   {total > 0 && (
-                    <span className="text-[11px] font-bold text-gray-600">
+                    <span className="text-[11px] font-bold text-zinc-600">
                       {formatHours(total)}
                     </span>
                   )}
@@ -152,8 +153,8 @@ export function MonthCalendar({
                         className="h-1 w-1 shrink-0 rounded-full"
                         style={{ background: projectColor(e.projectId) }}
                       />
-                      <span className="truncate text-[11px] text-gray-700">{e.title}</span>
-                      <span className="ml-auto shrink-0 text-[10px] text-gray-400">
+                      <span className="truncate text-[11px] text-zinc-700">{e.title}</span>
+                      <span className="ml-auto shrink-0 text-[10px] text-zinc-400">
                         {formatHours(e.minutes)}
                       </span>
                     </div>
@@ -266,12 +267,12 @@ function DayEntryModal({
             </Modal.Header>
             <Modal.Body>
               {/* 记一笔同款紧凑输入:单行 + 行内时长 + #项目 + 实时回显 */}
-              <div className="flex items-start gap-2 rounded-2xl border-2 border-blue-400 bg-white px-3 py-2">
+              <div className="flex items-start gap-2 rounded-2xl border-2 border-brand-400 bg-white px-3 py-2">
                 <textarea
                   rows={1}
                   value={title}
                   placeholder={`任务… 1.5h #项目(可选)`}
-                  className="mt-0.5 min-h-[28px] w-full flex-1 resize-none border-none bg-transparent text-sm leading-7 outline-none placeholder:text-gray-400"
+                  className="mt-0.5 min-h-[28px] w-full flex-1 resize-none border-none bg-transparent text-sm leading-7 outline-none placeholder:text-zinc-400"
                   onChange={(e) => {
                     setTitle(e.target.value);
                     e.target.style.height = "auto";
@@ -289,11 +290,11 @@ function DayEntryModal({
                     {busy ? <Spinner size="sm" /> : "记 ↵"}
                   </Button>
                   <div className="flex items-center gap-1 text-[11px] leading-none">
-                    <span className="text-gray-400">
+                    <span className="text-zinc-400">
                       {active.find((p) => p.id === parsed.projectId)?.name ?? "…"}
                     </span>
                     {parsed.minutes > 0 && (
-                      <span className="rounded bg-blue-50 px-1.5 py-0.5 font-medium text-blue-600">
+                      <span className="rounded bg-brand-50 px-1.5 py-0.5 font-medium text-brand-600">
                         {formatHours(parsed.minutes)}
                       </span>
                     )}
@@ -312,7 +313,7 @@ function DayEntryModal({
                       />
                       <input
                         aria-label="任务标题"
-                        className="min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-sm hover:border-gray-200 focus:border-blue-500 focus:bg-white focus:outline-none"
+                        className="min-w-0 flex-1 rounded-md border border-transparent px-1.5 py-0.5 text-sm hover:border-zinc-200 focus:border-brand-500 focus:bg-white focus:outline-none"
                         defaultValue={e.title}
                         onBlur={(ev) => {
                           const t = ev.target.value.trim();
@@ -323,7 +324,7 @@ function DayEntryModal({
                       />
                       <input
                         aria-label="时长(小时)"
-                        className="w-14 rounded-md border border-transparent px-1 py-0.5 text-center text-sm font-semibold tabular-nums hover:border-gray-200 focus:border-blue-500 focus:bg-white focus:outline-none"
+                        className="w-14 rounded-md border border-transparent px-1 py-0.5 text-center text-sm font-semibold tabular-nums hover:border-zinc-200 focus:border-brand-500 focus:bg-white focus:outline-none"
                         inputMode="decimal"
                         defaultValue={Math.round((e.minutes / 60) * 100) / 100 || ""}
                         title="支持 1.5 / 1:30 / 90m"
