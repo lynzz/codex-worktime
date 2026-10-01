@@ -1,20 +1,15 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
 import { useMemo, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { z } from "zod";
 import {
-  addDays,
   formatHours,
-  monthStart,
   parseDurationInput,
-  startOfWeek,
   todayKey,
   type Entry,
   type Project,
-  type Task,
 } from "@codex-worktime/timesheet-core";
-import { api as honoApi } from "@codex-worktime/timesheet-server";
+import { loadTimesheet } from "~/lib/timesheet-route";
 import { api } from "~/lib/api";
 import { projectColor } from "~/lib/colors";
 import { Button, Spinner, TextArea } from "~/components/ui";
@@ -26,48 +21,10 @@ const variantSchema = z.enum(["timeline", "cards", "waterfall"]).catch("timeline
 export const Route = createFileRoute("/home")({
   validateSearch: (s) => ({ variant: variantSchema.parse(s.variant) }),
   errorComponent: RouteErrorBoundary,
-  loader: () => loadHome({ data: { date: todayKey() } }),
+  // 共用装载(含会话鉴权):today 所在月 ±7 天,覆盖今天条目与外壳的本周/本月统计
+  loader: () => loadTimesheet({ data: { date: todayKey() } }),
   component: HomePage,
 });
-
-// 装载:今天条目 + 外壳洞察栏所需范围(本周与本月) + 项目/任务 + 累计
-const loadHome = createServerFn({ method: "GET" })
-  .validator((d: { date: string }) => d)
-  .handler(async () => {
-    for (let attempt = 1; ; attempt++) {
-      try {
-        return await load();
-      } catch (error) {
-        if (attempt >= 3) throw error;
-        await new Promise((r) => setTimeout(r, 800 * attempt));
-      }
-    }
-  });
-
-async function load() {
-  const t = todayKey();
-  const wk = startOfWeek(t);
-  const mS = monthStart(t);
-  const from = wk < mS ? wk : mS;
-  const to = addDays(t, 1);
-  const h = { "x-internal-key": process.env.ACCESS_PASSWORD ?? "" };
-  const [projectsRes, entriesRes, tasksRes, totalRes] = await Promise.all([
-    honoApi.request("/api/projects", { headers: h }),
-    honoApi.request(`/api/entries?from=${from}&to=${to}`, { headers: h }),
-    honoApi.request("/api/tasks", { headers: h }),
-    honoApi.request("/api/entries/total", { headers: h }),
-  ]);
-  const [projects, entries, tasks, total] = await Promise.all([
-    projectsRes.json() as Promise<Project[]>,
-    entriesRes.json() as Promise<Entry[]>,
-    tasksRes.json() as Promise<Task[]>,
-    totalRes.json() as Promise<{ minutes: number }>,
-  ]);
-  if ([projects, entries, tasks].some((a) => !Array.isArray(a))) {
-    throw new Error("加载数据失败(网络抖动,请刷新)");
-  }
-  return { projects, entries, tasks, totalMinutes: total.minutes };
-}
 
 function HomePage() {
   const data = Route.useLoaderData();
