@@ -1,7 +1,7 @@
 import * as React from "react";
 import { CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Popover as BasePopover } from "@base-ui-components/react/popover";
-import { addDays, monthDays, todayKey } from "@codex-worktime/timesheet-core";
+import { addDays, isWeekend, monthDays, todayKey } from "@codex-worktime/timesheet-core";
 import { cn } from "~/lib/utils";
 
 const DOW = ["一", "二", "三", "四", "五", "六", "日"];
@@ -75,8 +75,8 @@ export function DatePicker({
               </button>
             </div>
             <div className="grid grid-cols-7 gap-0.5 text-center">
-              {DOW.map((d) => (
-                <div key={d} className="py-1 text-xs text-zinc-400">
+              {DOW.map((d, i) => (
+                <div key={d} className={cn("rounded-md py-1 text-xs text-zinc-400", i >= 5 && "bg-zinc-100")}>
                   {d}
                 </div>
               ))}
@@ -91,7 +91,7 @@ export function DatePicker({
                     }}
                     className={cn(
                       "h-8 rounded-md text-sm transition-colors",
-                      "hover:bg-zinc-100",
+                      isWeekend(day) ? "bg-zinc-100 hover:bg-zinc-200" : "hover:bg-zinc-100",
                       day === value && "bg-brand-600 font-medium text-white hover:bg-brand-600",
                       day === today && day !== value && "text-brand-600 font-medium",
                       day !== value && day !== today && "text-zinc-700",
