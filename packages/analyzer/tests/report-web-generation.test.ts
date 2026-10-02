@@ -3,10 +3,10 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import { addUser, createApi, entries, getDb, projects, reportProfiles, reportRuns, reportSnapshots, tasks, users, type TimesheetApi } from "@codex-worktime/timesheet-server";
+import { addUser, createApi, entries, getDb, projects, reportCollectors, reportProfiles, reportRuns, reportSnapshots, startReportCollection, tasks, users, type TimesheetApi } from "@codex-worktime/timesheet-server";
 import { reportSnapshotSchema } from "@codex-worktime/report-core";
 import { createLocalReportCollector, type LocalReportCollector } from "../src/manual/report-collector.js";
 import { runCli } from "../src/index.js";
@@ -17,7 +17,7 @@ const username = `local_${crypto.randomUUID().slice(0, 8)}`;
 const password = "local-collector-controlled-password";
 const runResult = z.object({ id: z.string(), status: z.enum(["queued", "running", "succeeded", "failed"]), snapshotId: z.string().nullable(), errorCode: z.string().nullable() });
 
-describe.skipIf(!configured)("local report generation through authenticated HTTP", () => {
+describe.skipIf(!configured)("local and hosted report generation through authenticated HTTP", () => {
   const originalUrl = process.env.DATABASE_URL;
   const originalSecret = process.env.SESSION_SECRET;
   const originalDataDirectory = process.env.CODEX_WORKTIME_DATA_DIR;
@@ -39,11 +39,12 @@ describe.skipIf(!configured)("local report generation through authenticated HTTP
     return api.request(path, { method, headers: { cookie: session, "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
   }
   async function finish(runId: string) {
-    for (let attempt = 0; attempt < 60; attempt++) {
+    // Poll the real database-clock broker rather than advancing a fake host clock.
+    return vi.waitFor(async () => {
       const result = runResult.parse(await (await request(`/api/report-runs/${runId}`, undefined, cookie, "GET")).json());
-      if (result.status === "succeeded" || result.status === "failed") return result;
-    }
-    throw new Error("Controlled generation did not finish");
+      expect(["succeeded", "failed"]).toContain(result.status);
+      return result;
+    }, { timeout: 45_000, interval: 100 });
   }
   beforeAll(async () => {
     process.env.DATABASE_URL = process.env.NEON_TEST_DATABASE_URL;
@@ -69,7 +70,7 @@ describe.skipIf(!configured)("local report generation through authenticated HTTP
       });
     }
     collector = (await createLocalReportCollector(options()))!;
-    api = createApi({ reportCollector: collector });
+    api = createApi();
     cookie = await login(username);
     otherCookie = await login(`${username}_b`);
     for (const [session, id] of [[cookie, owner], [otherCookie, other]]) {
@@ -83,6 +84,7 @@ describe.skipIf(!configured)("local report generation through authenticated HTTP
       const ids = [owner, other];
       const db = getDb();
       await db.batch([
+        db.delete(reportCollectors).where(inArray(reportCollectors.userId, ids)),
         db.delete(reportRuns).where(inArray(reportRuns.userId, ids)),
         db.delete(reportSnapshots).where(inArray(reportSnapshots.userId, ids)),
         db.delete(reportProfiles).where(inArray(reportProfiles.userId, ids)),
@@ -98,6 +100,96 @@ describe.skipIf(!configured)("local report generation through authenticated HTTP
     if (originalDataDirectory === undefined) delete process.env.CODEX_WORKTIME_DATA_DIR;
     else process.env.CODEX_WORKTIME_DATA_DIR = originalDataDirectory;
   });
+
+  it("generates from the hosted API through an online trusted host without local HTTP or JSON import", async () => {
+    const collection = await startReportCollection(collector);
+    try {
+      expect(await (await request("/api/reports/capabilities", undefined, cookie, "GET")).json()).toMatchObject({
+        generate: true, generationMode: "connected",
+      });
+      const registered = z.object({
+        profiles: z.array(z.object({ profileId: z.string(), projectId: z.string(), displayName: z.string() }).strict()),
+        availableProfiles: z.array(z.object({ profileId: z.string(), displayName: z.string() }).strict()),
+      }).strict().parse(await (await request("/api/report-profiles", undefined, cookie, "GET")).json());
+      expect(registered.availableProfiles).toEqual([{ profileId: "demo", displayName: "本机受控报告" }]);
+      expect(JSON.stringify(registered)).not.toContain(root);
+      const foreignProfiles = z.object({ availableProfiles: z.array(z.unknown()) })
+        .parse(await (await request("/api/report-profiles", undefined, otherCookie, "GET")).json());
+      expect(foreignProfiles.availableProfiles).toEqual([]);
+      expect((await request("/api/reports/generate", { profileId: "demo", month: "2026-08" }, otherCookie)).status).toBe(404);
+      expect((await request("/api/reports/generate", { profileId: "unknown", month: "2026-08" })).status).toBe(404);
+
+      const generated = await request("/api/reports/generate", { profileId: "demo", month: "2026-08" });
+      expect(generated.status).toBe(202);
+      const runId = z.object({ runId: z.string() }).parse(await generated.json()).runId;
+      const completed = await finish(runId);
+      expect(completed.status).toBe("succeeded");
+      const storedResponse = await request(`/api/reports/${completed.snapshotId}`, undefined, cookie, "GET");
+      expect(storedResponse.status).toBe(200);
+      const stored = z.object({ id: z.string(), snapshot: reportSnapshotSchema }).parse(await storedResponse.json());
+      expect(stored.snapshot.totals).toMatchObject({ activeMs: 1234, commitEstimateMs: 30000, estimatedCostCents: 125 });
+      expect(stored.snapshot.days[0]).toMatchObject({ commitCount: 2, commitMessages: [{ title: "feat(report): <b>local message</b>", count: 2 }] });
+      expect(stored.snapshot.sources).toContainEqual(expect.objectContaining({ source: "hook", eventCount: 2 }));
+      for (const secret of [root, directory, "PRIVATE_LOCAL_SESSION", "PRIVATE_LOCAL_TURN", "PRIVATE_LOCAL_PROMPT"]) {
+        expect(JSON.stringify(stored)).not.toContain(secret);
+      }
+      expect((await request(`/api/reports/${stored.id}`, undefined, otherCookie, "GET")).status).toBe(404);
+      expect((await request(`/api/report-runs/${runId}`, undefined, otherCookie, "GET")).status).toBe(404);
+
+      await collection.close();
+      expect(await (await request("/api/reports/capabilities", undefined, cookie, "GET")).json()).toMatchObject({
+        generate: false, generationMode: "offline",
+      });
+      expect(z.object({ availableProfiles: z.array(z.unknown()) })
+        .parse(await (await request("/api/report-profiles", undefined, cookie, "GET")).json()).availableProfiles).toEqual([]);
+      const offline = await request("/api/reports/generate", { profileId: "demo", month: "2026-08" });
+      expect(offline.status).toBe(503);
+      expect(await offline.json()).toEqual({ error: "REPORT_COLLECTOR_OFFLINE" });
+      expect(await finish(runId)).toMatchObject({ status: "succeeded", snapshotId: stored.id, errorCode: null });
+    } finally {
+      await collection.close();
+      await collector.close();
+      collector = (await createLocalReportCollector(options()))!;
+      api = createApi({ reportCollector: collector });
+    }
+  }, 60_000);
+
+  it("interrupts a closing hosted collector and rejects its late real-builder result", async () => {
+    const closingCollector = (await createLocalReportCollector(options()))!;
+    const release = Promise.withResolvers<void>();
+    let built = false;
+    api = createApi();
+    const collection = await startReportCollection({
+      ...closingCollector,
+      async collect(userId, profileId, month) {
+        const snapshot = await closingCollector.collect(userId, profileId, month);
+        built = true;
+        await release.promise;
+        return snapshot;
+      },
+    });
+    try {
+      const generated = await request("/api/reports/generate", { profileId: "demo", month: "2026-09" });
+      expect(generated.status).toBe(202);
+      const runId = z.object({ runId: z.string() }).parse(await generated.json()).runId;
+      await vi.waitFor(() => expect(built).toBe(true), { timeout: 30_000, interval: 100 });
+      const running = runResult.parse(await (await request(`/api/report-runs/${runId}`, undefined, cookie, "GET")).json());
+      expect(running.status).toBe("running");
+      const closing = collection.close();
+      release.resolve();
+      await closing;
+      await closingCollector.close();
+      expect(await finish(runId)).toMatchObject({ status: "failed", errorCode: "INTERRUPTED", snapshotId: null });
+      const reports = await request("/api/reports?profileId=demo&month=2026-09", undefined, cookie, "GET");
+      expect(await reports.json()).toEqual({ currentId: null, versions: [] });
+      expect((await request("/api/reports/generate", { profileId: "demo", month: "2026-09" })).status).toBe(503);
+    } finally {
+      release.resolve();
+      await collection.close();
+      await closingCollector.close();
+      api = createApi({ reportCollector: collector });
+    }
+  }, 60_000);
 
   it("collects real Git and SQLite Hook data, persists exact evidence, and denies another local user", async () => {
     expect((await request("/api/reports/generate", { profileId: "demo", month: "2026-08" }, otherCookie)).status).toBe(404);
@@ -124,6 +216,7 @@ describe.skipIf(!configured)("local report generation through authenticated HTTP
 
   it("concurrent local incarnations recover retired work without interrupting live peers", async () => {
     const [peerA, peerB] = await Promise.all([createLocalReportCollector(options()), createLocalReportCollector(options())]);
+    const peerCollection = await startReportCollection(peerA!);
     try {
       const instanceId = collector.instanceId;
       await collector.close();
@@ -139,7 +232,7 @@ describe.skipIf(!configured)("local report generation through authenticated HTTP
       expect(result).toMatchObject({ status: "failed", snapshotId: null, errorCode: "INTERRUPTED" });
       const peer = await getDb().select().from(reportRuns).where(eq(reportRuns.id, activePeer));
       expect(peer[0]?.status).toBe("running");
-    } finally { await peerA?.close(); await peerB?.close(); }
+    } finally { await peerCollection.close(); await peerA?.close(); await peerB?.close(); }
   }, 30_000);
 
   it("recovers a killed local process through the public run endpoint", async () => {

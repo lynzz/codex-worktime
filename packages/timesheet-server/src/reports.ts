@@ -8,14 +8,19 @@ import {
 } from "@codex-worktime/report-core";
 import type { AppEnv } from "./auth.js";
 import { getDb } from "./db.js";
-import { projects, reportProfiles, reportSnapshots, reportRuns } from "./schema.js";
+import { projects, reportCollectors, reportProfiles, reportSnapshots, reportRuns } from "./schema.js";
 
 export interface ReportCollector {
   instanceId: string;
+  ownerId(): Promise<string | undefined>;
   interruptedInstanceIds?: readonly string[];
   recoveryComplete?(): Promise<void>;
   profiles(userId: string): Promise<{ profileId: string; displayName: string }[]>;
   collect(userId: string, profileId: string, month: string): Promise<ReportSnapshot>;
+}
+
+export interface ReportCollection {
+  close(): Promise<void>;
 }
 
 const profileIdSchema = z.string().regex(/^[a-z][a-z0-9_-]*$/).max(128);
@@ -108,7 +113,7 @@ async function validatedSnapshot(raw: unknown): Promise<ReportSnapshot> {
 }
 
 /** Neon HTTP batch is one SQL transaction, including the successful run transition. */
-async function persist(userId: string, snapshot: ReportSnapshot, source: "import" | "generated", runId?: string) {
+async function persist(userId: string, snapshot: ReportSnapshot, source: "import" | "generated", run?: { id: string; instanceId: string }) {
   const db = getDb();
   const proposedId = crypto.randomUUID();
   const key = identity(userId, snapshot);
@@ -138,20 +143,30 @@ async function persist(userId: string, snapshot: ReportSnapshot, source: "import
     .where(and(eq(reportSnapshots.id, proposedId), eq(reportSnapshots.userId, userId)));
   const read = db.select().from(reportSnapshots).where(key).limit(1);
   let rows: (typeof reportSnapshots.$inferSelect)[];
-  if (runId) {
-    const ownerRun = and(eq(reportRuns.id, runId), eq(reportRuns.userId, userId), eq(reportRuns.status, "running"));
+  if (run) {
+    const ownerRun = and(eq(reportRuns.id, run.id), eq(reportRuns.userId, userId),
+      eq(reportRuns.instanceId, run.instanceId), eq(reportRuns.status, "running"));
+    const liveLease = sql`exists (select 1 from report_collectors
+      where user_id = ${userId} and instance_id = ${run.instanceId} and lease_expires_at > clock_timestamp())`;
     const results = await db.batch([
+      // Lock the lease before the run, matching retirement's lock order.
+      db.select({ instanceId: reportCollectors.instanceId }).from(reportCollectors)
+        .where(and(eq(reportCollectors.userId, userId), eq(reportCollectors.instanceId, run.instanceId),
+          sql`${reportCollectors.leaseExpiresAt} > clock_timestamp()`)).for("share"),
+      db.select({ id: reportRuns.id }).from(reportRuns).where(ownerRun).for("update"),
+      db.execute(sql`select 1 / count(*)::integer as run_owned from report_runs
+        where ${ownerRun} and ${liveLease}`),
       insert, days,
       db.update(reportRuns).set({ status: "succeeded", finishedAt: sql`clock_timestamp()`, errorCode: null,
-        snapshotId: sql`(select ${reportSnapshots.id} from ${reportSnapshots} where ${key})` }).where(ownerRun),
-      // A missing/changed run must abort the snapshot transaction, never fake success.
+        snapshotId: sql`(select ${reportSnapshots.id} from ${reportSnapshots} where ${key})` }).where(and(ownerRun, liveLease)),
+      // A changed run or expired incarnation aborts every snapshot/day write.
       db.execute(sql`select 1 / count(*)::integer as run_saved from report_runs
-        where id = ${runId} and user_id = ${userId} and status = 'succeeded'
-          and snapshot_id = (select ${reportSnapshots.id} from ${reportSnapshots} where ${key})`),
+        where id = ${run.id} and user_id = ${userId} and instance_id = ${run.instanceId}
+          and status = 'succeeded' and snapshot_id = (select ${reportSnapshots.id} from ${reportSnapshots} where ${key})`),
       complete,
       read,
     ]);
-    rows = results[5];
+    rows = results[8];
   } else {
     const results = await db.batch([insert, days, complete, read]);
     rows = results[3];
@@ -160,58 +175,308 @@ async function persist(userId: string, snapshot: ReportSnapshot, source: "import
   return { report: detail(rows[0]), created: rows[0].id === proposedId };
 }
 
+const LEASE_DURATION = sql`interval '60 seconds'`;
+const POLL_MS = 2000;
+const HEARTBEAT_MS = 15000;
+
+async function recoverExpiredRuns(userId: string) {
+  await getDb().execute(sql`update report_runs r
+    set status = 'failed', finished_at = clock_timestamp(), error_code = 'INTERRUPTED'
+    where r.user_id = ${userId} and r.status in ('queued', 'running')
+      and not exists (select 1 from report_collectors c
+        where c.user_id = r.user_id and c.instance_id = r.instance_id
+          and c.lease_expires_at > clock_timestamp()
+          and c.profiles @> jsonb_build_array(jsonb_build_object('profileId', r.profile_id)))`);
+}
+
+async function registeredProfiles(userId: string, liveOnly = true) {
+  const rows = await getDb().select({ profiles: reportCollectors.profiles }).from(reportCollectors)
+    .where(and(eq(reportCollectors.userId, userId),
+      liveOnly ? sql`${reportCollectors.leaseExpiresAt} > clock_timestamp()` : undefined))
+    .orderBy(asc(reportCollectors.instanceId));
+  const profiles = new Map<string, z.infer<typeof localProfileSchema>>();
+  for (const row of rows) {
+    for (const profile of z.array(localProfileSchema).parse(row.profiles)) {
+      if (!profiles.has(profile.profileId)) profiles.set(profile.profileId, profile);
+    }
+  }
+  return [...profiles.values()];
+}
+
+async function enqueue(userId: string, profileId: string, month: string, instanceId?: string) {
+  const id = crypto.randomUUID();
+  const result = await getDb().execute(sql`with host as (
+    select instance_id from report_collectors
+    where user_id = ${userId} and lease_expires_at > clock_timestamp()
+      and profiles @> ${JSON.stringify([{ profileId }])}::jsonb
+      ${instanceId === undefined ? sql`` : sql`and instance_id = ${instanceId}`}
+    order by lease_expires_at desc, instance_id limit 1 for share
+  ) insert into report_runs (id, user_id, profile_id, month, instance_id, status)
+    select ${id}, ${userId}, ${profileId}, ${month}, instance_id, 'queued' from host
+    returning id`);
+  return result.rows.length ? id : undefined;
+}
+
+/** Shared by direct Node generation and the hosted broker's trusted consumer. */
+class ReportExecution implements ReportCollection {
+  private owner: string | undefined;
+  private profiles: z.infer<typeof localProfileSchema>[] = [];
+  private initialization: Promise<void> | undefined;
+  private closed = false;
+  private background = false;
+  private pollTimer: NodeJS.Timeout | undefined;
+  private heartbeatTimer: NodeJS.Timeout | undefined;
+  private heartbeatFlight: Promise<void> | undefined;
+  private flight: Promise<void> | undefined;
+  private wakeRequested = false;
+  private recoverUnclaimedRun = false;
+  private closing: Promise<void> | undefined;
+
+  constructor(private readonly collector: ReportCollector) {}
+
+  initialize(): Promise<void> {
+    this.initialization ??= this.register().catch((error: unknown) => {
+      this.initialization = undefined;
+      throw error;
+    });
+    return this.initialization;
+  }
+
+  private async register() {
+    this.owner = await this.collector.ownerId();
+    if (this.owner === undefined) return;
+    if (!this.owner || !this.collector.instanceId) throw new Error("INVALID_REPORT_COLLECTOR");
+    this.profiles = z.array(localProfileSchema).parse(await this.collector.profiles(this.owner));
+    const instances = [this.collector.instanceId, ...(this.collector.interruptedInstanceIds ?? [])];
+    const db = getDb();
+    await db.batch([
+      db.update(reportCollectors).set({ leaseExpiresAt: sql`clock_timestamp()` })
+        .where(and(eq(reportCollectors.userId, this.owner), inArray(reportCollectors.instanceId, instances))),
+      db.update(reportRuns).set({ status: "failed", finishedAt: sql`clock_timestamp()`, errorCode: "INTERRUPTED" })
+        .where(and(eq(reportRuns.userId, this.owner), inArray(reportRuns.instanceId, instances),
+          inArray(reportRuns.status, ["queued", "running"]))),
+      db.insert(reportCollectors).values({ userId: this.owner, instanceId: this.collector.instanceId,
+        profiles: this.profiles, leaseExpiresAt: sql`clock_timestamp() + ${LEASE_DURATION}` })
+        .onConflictDoUpdate({ target: [reportCollectors.userId, reportCollectors.instanceId], set: {
+          profiles: this.profiles, leaseExpiresAt: sql`clock_timestamp() + ${LEASE_DURATION}`,
+        } }),
+    ]);
+    try {
+      await this.collector.recoveryComplete?.();
+    } catch (error) {
+      // A failed startup must not leave an advertised, unconsumed registration.
+      await db.batch([
+        db.update(reportCollectors).set({ leaseExpiresAt: sql`clock_timestamp()` })
+          .where(and(eq(reportCollectors.userId, this.owner), eq(reportCollectors.instanceId, this.collector.instanceId))),
+        db.update(reportRuns).set({ status: "failed", finishedAt: sql`clock_timestamp()`, errorCode: "INTERRUPTED" })
+          .where(and(eq(reportRuns.userId, this.owner), eq(reportRuns.instanceId, this.collector.instanceId),
+            inArray(reportRuns.status, ["queued", "running"]))),
+      ]);
+      throw error;
+    }
+  }
+
+  async availableProfiles(userId: string) {
+    await this.initialize();
+    if (this.closed || this.owner !== userId) return [];
+    if (!await this.renew()) return [];
+    return this.closed ? [] : this.profiles;
+  }
+
+  knownProfiles(userId: string) {
+    return this.owner === userId ? this.profiles : [];
+  }
+
+  private async renew() {
+    if (this.closed || !this.owner) return false;
+    const updated = await getDb().update(reportCollectors)
+      .set({ leaseExpiresAt: sql`clock_timestamp() + ${LEASE_DURATION}` })
+      .where(and(eq(reportCollectors.userId, this.owner), eq(reportCollectors.instanceId, this.collector.instanceId),
+        sql`${reportCollectors.leaseExpiresAt} > clock_timestamp()`)).returning({ instanceId: reportCollectors.instanceId });
+    if (updated.length) return true;
+    // An expired incarnation cannot resurrect and accept a late result.
+    this.closed = true;
+    this.stopTimers();
+    await recoverExpiredRuns(this.owner);
+    return false;
+  }
+
+  private startHeartbeat() {
+    if (this.heartbeatTimer || this.heartbeatFlight || this.closed || !this.owner) return;
+    this.heartbeatTimer = setTimeout(() => {
+      this.heartbeatTimer = undefined;
+      this.heartbeatFlight = this.renew().then(() => {}, () => {
+        // Keep retrying on the next tick; the database lease remains the fence.
+      }).finally(() => {
+        this.heartbeatFlight = undefined;
+        if (this.background || this.flight) this.startHeartbeat();
+      });
+    }, HEARTBEAT_MS);
+  }
+
+  private stopTimers() {
+    clearTimeout(this.pollTimer);
+    clearTimeout(this.heartbeatTimer);
+    this.pollTimer = undefined;
+    this.heartbeatTimer = undefined;
+  }
+
+  async start() {
+    await this.initialize();
+    if (this.closed) throw new Error("REPORT_COLLECTOR_CLOSED");
+    if (!this.owner || this.background) return;
+    if (!await this.renew()) throw new Error("REPORT_COLLECTOR_OFFLINE");
+    if (this.closed) throw new Error("REPORT_COLLECTOR_CLOSED");
+    this.background = true;
+    this.startHeartbeat();
+    this.wake();
+  }
+
+  wake() {
+    if (this.closed || !this.owner) return;
+    if (this.flight) { this.wakeRequested = true; return; }
+    clearTimeout(this.pollTimer);
+    this.pollTimer = undefined;
+    this.startHeartbeat();
+    this.flight = this.drain().catch(() => {
+      this.recoverUnclaimedRun = true;
+      // Polling failures expose no source paths, histories or credentials.
+    }).finally(() => {
+      this.flight = undefined;
+      if (this.closed) return;
+      if (this.wakeRequested) {
+        this.wakeRequested = false;
+        this.wake();
+      } else if (this.background || this.recoverUnclaimedRun) {
+        this.pollTimer = setTimeout(() => { this.pollTimer = undefined; this.wake(); }, POLL_MS);
+      } else {
+        clearTimeout(this.heartbeatTimer);
+        this.heartbeatTimer = undefined;
+      }
+    });
+  }
+
+  private async drain() {
+    await recoverExpiredRuns(this.owner!);
+    if (this.recoverUnclaimedRun) {
+      // A claim may have committed despite a lost response. No local collection
+      // is active between serial drains, so that abandoned claim can be retired.
+      await getDb().update(reportRuns).set({ status: "failed", finishedAt: sql`clock_timestamp()`, errorCode: "INTERRUPTED" })
+        .where(and(eq(reportRuns.userId, this.owner!), eq(reportRuns.instanceId, this.collector.instanceId),
+          eq(reportRuns.status, "running")));
+      this.recoverUnclaimedRun = false;
+    }
+    while (!this.closed) {
+      const claimed = await getDb().execute(sql`with host as (
+        select instance_id, profiles from report_collectors
+        where user_id = ${this.owner!} and instance_id = ${this.collector.instanceId}
+          and lease_expires_at > clock_timestamp() for share
+      ), next_run as (
+        select r.id from report_runs r cross join host
+        where r.user_id = ${this.owner!} and r.instance_id = host.instance_id and r.status = 'queued'
+          and host.profiles @> jsonb_build_array(jsonb_build_object('profileId', r.profile_id))
+        order by r.created_at, r.id limit 1 for update of r skip locked
+      ) update report_runs r set status = 'running', started_at = clock_timestamp()
+        from next_run where r.id = next_run.id and r.status = 'queued'
+        returning r.id, r.profile_id, r.month`);
+      if (this.closed || !claimed.rows[0]) return;
+      const run = z.object({ id: z.string(), profile_id: profileIdSchema, month: reportMonthSchema }).parse(claimed.rows[0]);
+      await this.execute(run.id, run.profile_id, run.month);
+    }
+  }
+
+  private async execute(id: string, profileId: string, month: string) {
+    let phase: "COLLECT_FAILED" | "SAVE_FAILED" = "COLLECT_FAILED";
+    try {
+      const snapshot = await validatedSnapshot(await this.collector.collect(this.owner!, profileId, month));
+      if (snapshot.project.profileId !== profileId || snapshot.period.month !== month) throw new Error("INVALID_COLLECTED_REPORT");
+      if (this.closed) return;
+      phase = "SAVE_FAILED";
+      await persist(this.owner!, snapshot, "generated", { id, instanceId: this.collector.instanceId });
+    } catch {
+      if (this.closed) return;
+      // A lost response must never downgrade a committed success.
+      try {
+        await getDb().update(reportRuns).set({ status: "failed", finishedAt: sql`clock_timestamp()`, errorCode: phase })
+          .where(and(eq(reportRuns.id, id), eq(reportRuns.userId, this.owner!),
+            eq(reportRuns.instanceId, this.collector.instanceId), eq(reportRuns.status, "running"),
+            sql`exists (select 1 from report_collectors where user_id = ${this.owner!}
+              and instance_id = ${this.collector.instanceId} and lease_expires_at > clock_timestamp())`));
+        await recoverExpiredRuns(this.owner!);
+      } catch { /* Retain unfinished state for lease/restart recovery without private diagnostics. */ }
+    }
+  }
+
+  close(): Promise<void> {
+    this.closed = true;
+    this.background = false;
+    this.stopTimers();
+    this.closing ??= this.retire();
+    return this.closing;
+  }
+
+  private async retire() {
+    await this.initialization;
+    await this.heartbeatFlight;
+    try {
+      if (this.owner) {
+        const db = getDb();
+        await db.batch([
+          db.update(reportCollectors).set({ leaseExpiresAt: sql`clock_timestamp()` })
+            .where(and(eq(reportCollectors.userId, this.owner), eq(reportCollectors.instanceId, this.collector.instanceId))),
+          db.update(reportRuns).set({ status: "failed", finishedAt: sql`clock_timestamp()`, errorCode: "INTERRUPTED" })
+            .where(and(eq(reportRuns.userId, this.owner), eq(reportRuns.instanceId, this.collector.instanceId),
+              inArray(reportRuns.status, ["queued", "running"]))),
+        ]);
+      }
+    } finally {
+      await this.flight;
+    }
+  }
+}
+
+const executions = new WeakMap<ReportCollector, ReportExecution>();
+function executionFor(collector: ReportCollector) {
+  let execution = executions.get(collector);
+  if (!execution) {
+    execution = new ReportExecution(collector);
+    executions.set(collector, execution);
+  }
+  return execution;
+}
+
+export async function startReportCollection(collector: ReportCollector): Promise<ReportCollection> {
+  const execution = executionFor(collector);
+  await execution.start();
+  return execution;
+}
+
 export function createReportsRouter(collector?: ReportCollector): Hono<AppEnv> {
   const router = new Hono<AppEnv>();
-  let initialization: Promise<void> | undefined;
-  function initialize() {
-    if (!collector) return Promise.resolve();
-    initialization ??= getDb().update(reportRuns).set({
-      status: "failed", finishedAt: sql`clock_timestamp()`, errorCode: "INTERRUPTED",
-    }).where(and(inArray(reportRuns.instanceId, [collector.instanceId, ...(collector.interruptedInstanceIds ?? [])]),
-      inArray(reportRuns.status, ["queued", "running"])))
-      .then(async () => { await collector.recoveryComplete?.(); })
-      .catch((error: unknown) => { initialization = undefined; throw error; });
-    return initialization;
-  }
-  async function localProfiles(userId: string) {
-    if (!collector) return [];
-    return z.array(localProfileSchema).parse(await collector.profiles(userId));
-  }
-  async function failRun(userId: string, id: string, errorCode: "COLLECT_FAILED" | "SAVE_FAILED") {
-    await getDb().update(reportRuns).set({ status: "failed", finishedAt: sql`clock_timestamp()`, errorCode })
-      .where(and(eq(reportRuns.id, id), eq(reportRuns.userId, userId), inArray(reportRuns.status, ["queued", "running"])));
-  }
-  async function generate(userId: string, id: string, profileId: string, month: string) {
-    let phase: "COLLECT_FAILED" | "SAVE_FAILED" = "SAVE_FAILED";
-    try {
-      const started = await getDb().update(reportRuns).set({ status: "running", startedAt: sql`clock_timestamp()` })
-        .where(and(eq(reportRuns.id, id), eq(reportRuns.userId, userId), eq(reportRuns.status, "queued"))).returning({ id: reportRuns.id });
-      if (!started.length) return;
-      phase = "COLLECT_FAILED";
-      const snapshot = await validatedSnapshot(await collector!.collect(userId, profileId, month));
-      if (snapshot.project.profileId !== profileId || snapshot.period.month !== month) throw new Error("INVALID_COLLECTED_REPORT");
-      phase = "SAVE_FAILED";
-      await persist(userId, snapshot, "generated", id);
-    } catch {
-      // A transaction may have committed despite a lost response; never downgrade success.
-      // If failure storage is unavailable, retain unfinished state for same-instance recovery.
-      try { await failRun(userId, id, phase); } catch { /* No false success, no private diagnostics. */ }
-    }
+  const execution = collector ? executionFor(collector) : undefined;
+  async function availableProfiles(userId: string) {
+    return execution ? execution.availableProfiles(userId) : registeredProfiles(userId);
   }
   router.onError((error, c) => {
     if (error instanceof HTTPException) return c.json({ error: error.message }, error.status);
     return c.json({ error: "REPORT_STORAGE_FAILED" }, 503);
   });
-  router.use("*", async (_c, next) => { await initialize(); await next(); });
+  router.use("*", async (c, next) => {
+    await execution?.initialize();
+    await recoverExpiredRuns(c.get("userId"));
+    await next();
+  });
 
-  router.get("/reports/capabilities", async (c) => c.json({
-    localGenerate: (await localProfiles(c.get("userId"))).length > 0, import: true, query: true, export: true,
-  }));
+  router.get("/reports/capabilities", async (c) => {
+    const generate = (await availableProfiles(c.get("userId"))).length > 0;
+    return c.json({ generate, generationMode: generate ? (execution ? "local" : "connected") : "offline",
+      import: true, query: true, export: true });
+  });
   router.get("/report-profiles", async (c) => {
     const userId = c.get("userId");
     const profiles = await getDb().select({ profileId: reportProfiles.profileId, projectId: reportProfiles.projectId, displayName: reportProfiles.displayName })
       .from(reportProfiles).where(eq(reportProfiles.userId, userId)).orderBy(asc(reportProfiles.displayName), asc(reportProfiles.profileId));
-    return c.json({ profiles, availableProfiles: await localProfiles(userId) });
+    return c.json({ profiles, availableProfiles: await availableProfiles(userId) });
   });
   router.put("/report-profiles/:profileId", async (c) => {
     const profileId = profileIdSchema.safeParse(c.req.param("profileId"));
@@ -248,17 +513,21 @@ export function createReportsRouter(collector?: ReportCollector): Hono<AppEnv> {
   router.post("/reports/generate", async (c) => {
     const body = selectionSchema.safeParse(await boundedJson(c.req.raw, 8192));
     if (!body.success) return c.json({ error: "INVALID_REPORT_SELECTION" }, 400);
-    if (!collector) return c.json({ error: "LOCAL_GENERATION_UNSUPPORTED" }, 501);
     const userId = c.get("userId");
     const { profileId, month } = body.data;
     await ownedMapping(userId, profileId);
-    if (!(await localProfiles(userId)).some((profile) => profile.profileId === profileId)) {
+    const available = await availableProfiles(userId);
+    const known = execution ? execution.knownProfiles(userId) : await registeredProfiles(userId, false);
+    if (!known.some((profile) => profile.profileId === profileId)) {
       return c.json({ error: "REPORT_PROFILE_NOT_FOUND" }, 404);
     }
-    const id = crypto.randomUUID();
-    await getDb().insert(reportRuns).values({ id, userId, profileId, month, instanceId: collector.instanceId, status: "queued" });
-    // The Node host owns this finite task; Worker default never enters this branch.
-    setTimeout(() => { void generate(userId, id, profileId, month); }, 0);
+    if (!available.some((profile) => profile.profileId === profileId)) {
+      return c.json({ error: "REPORT_COLLECTOR_OFFLINE" }, 503);
+    }
+    const id = await enqueue(userId, profileId, month, collector?.instanceId);
+    if (!id) return c.json({ error: "REPORT_COLLECTOR_OFFLINE" }, 503);
+    // Only the trusted Node adapter wakes collection; Worker only persists the queue.
+    execution?.wake();
     return c.json({ runId: id }, 202);
   });
   router.get("/report-runs/:id", async (c) => {

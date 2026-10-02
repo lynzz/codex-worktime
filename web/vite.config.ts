@@ -17,7 +17,9 @@ export default defineConfig({
   plugins: [
     tailwindcss(),
     tanstackStart(),
-    nitro(nitroPreset ? { preset: nitroPreset } : undefined),
+    nitro(nitroPreset
+      ? { preset: nitroPreset }
+      : { plugins: [path.resolve(dirname, "src/lib/report-startup.node.ts")] }),
     viteReact(),
   ],
   resolve: {

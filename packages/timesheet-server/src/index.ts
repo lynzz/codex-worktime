@@ -1,7 +1,7 @@
 export { api, createApi, type TimesheetApi } from "./api.js";
 export {
-  reportSummarySchema, reportDetailSchema, reportRunSchema,
-  type ReportCollector, type ReportSummary, type ReportDetail, type ReportRun,
+  reportSummarySchema, reportDetailSchema, reportRunSchema, startReportCollection,
+  type ReportCollector, type ReportCollection, type ReportSummary, type ReportDetail, type ReportRun,
 } from "./reports.js";
 export { dbConfigured, getDb } from "./db.js";
 export * from "./schema.js";

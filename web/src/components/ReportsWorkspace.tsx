@@ -144,6 +144,7 @@ export function ReportsWorkspace({ data, search, navigate, refresh }: {
   const generating = Boolean(runId && (!run || run.status === "queued" || run.status === "running"));
   const disabled = busy !== null;
   const selected = data.selected;
+  const selectedProfileAvailable = data.profiles.availableProfiles.some((profile) => profile.profileId === data.profileId);
 
   return <div className="mx-auto w-full min-w-0 max-w-[1600px] space-y-5">
     <div className="rounded-xl border border-zinc-200 p-4">
@@ -158,10 +159,17 @@ export function ReportsWorkspace({ data, search, navigate, refresh }: {
         <div className="space-y-1"><p className="text-xs text-zinc-500">报告月份（上海时区）</p>
           <MonthPicker ariaLabel="报告月份" value={search.month} onChange={(month) => void chooseReport({ profileId: data.profileId, month })} />
         </div>
-        <Button variant="secondary" isDisabled={loading} onPress={() => void refresh()}>刷新已保存版本</Button>
-        {data.capabilities?.localGenerate && <Button isDisabled={disabled || generating || !data.profileId} onPress={generate}>{busy === "generate" ? "正在创建运行…" : generating ? "生成中…" : run?.status === "failed" ? "重试生成" : "本机生成报告"}</Button>}
+        <Button variant="secondary" isDisabled={loading} onPress={() => void refresh()}>刷新报告与连接</Button>
+        <Button isDisabled={disabled || generating || !data.capabilities?.generate || !selectedProfileAvailable} onPress={generate}>{busy === "generate" ? "正在创建运行…" : generating ? "生成中…" : run?.status === "failed" ? "重试生成" : "生成报告"}</Button>
       </div>
-      {data.capabilities && !data.capabilities.localGenerate && <p className="mt-3 break-words text-sm text-zinc-500">此运行环境不能直接采集你的本机数据。请在本机登记 Project Profile,执行 <code className="rounded bg-zinc-100 px-1">codex-worktime report-month --profile-id &lt;Profile ID&gt; --month {search.month} --data-dir &lt;本机数据目录&gt; --output report.html --json-output report.json</code>,检查脱敏结果后在下方导入。云端查询和下载不需要本机来源。</p>}
+      {data.capabilities && <p role="status" className="mt-3 break-words text-sm text-zinc-500">
+        {data.capabilities.generationMode === "offline"
+          ? "本机采集服务离线。保持已授权的本机工时速记服务运行后,刷新连接状态即可直接生成。无需执行 CLI 或导入 JSON；已有报告仍可查看和下载。"
+          : data.capabilities.generationMode === "connected"
+            ? "已连接你的本机采集服务。点击生成将自动采集、计算并保存到数据库,无需执行 CLI 或手动导入。生成期间请保持电脑和采集服务在线。"
+            : "本机采集服务已就绪。点击生成将自动采集、计算并保存到数据库,线上登录同一账号即可查看。"}
+      </p>}
+      {data.capabilities?.generate && data.profileId && !selectedProfileAvailable && <p className="mt-2 text-sm text-amber-700">已连接的采集服务尚未登记此 Profile。请在已授权电脑登记该 Profile,重启本机采集服务后刷新连接状态。</p>}
     </div>
 
     <details className="rounded-xl border border-zinc-200 p-4" open={data.profiles.profiles.length === 0}>
@@ -190,14 +198,14 @@ export function ReportsWorkspace({ data, search, navigate, refresh }: {
       </li>)}</ul>}
     </details>
 
-    <section aria-label="导入结构化报告" className="rounded-xl border border-zinc-200 p-4">
-      <h2 className="text-sm font-semibold">导入本机报告 JSON</h2>
+    <details aria-label="导入结构化报告" className="rounded-xl border border-zinc-200 p-4">
+      <summary className="cursor-pointer text-sm font-semibold">手动导入 JSON（备份迁移,可选）</summary>
       <p className="mt-1 text-xs text-zinc-500">文件内的 Profile 必须已关联你的人工项目。仅接受版本化脱敏快照（最多 2 MiB）,不接受 HTML；导入不会写入人工工时。</p>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <input aria-label="报告 JSON 文件" type="file" accept=".json,application/json" className="max-w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-100 file:px-3 file:py-2 file:text-zinc-700" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
         <Button isDisabled={disabled || !file || !data.capabilities || data.profiles.profiles.length === 0} onPress={importFile}>{busy === "import" ? "正在导入并保存…" : "导入并保存"}</Button>
       </div>
-    </section>
+    </details>
 
     {loading && <p role="status" className="text-sm text-zinc-500">正在加载所选报告…</p>}
     {(error || data.reportError) && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error || data.reportError}<Button variant="secondary" className="ml-3" onPress={() => void refresh()}>重试查询</Button></div>}
@@ -228,7 +236,7 @@ export function ReportsWorkspace({ data, search, navigate, refresh }: {
       </div>
       <ReportSnapshotView key={selected.id} snapshot={selected.snapshot} />
     </div> : !data.reportError && <div className="rounded-xl border border-dashed border-zinc-200 p-8 text-center text-sm text-zinc-500">
-      {data.profileId ? `${search.month} 尚无已保存报告。可导入 JSON${data.capabilities?.localGenerate ? "或在本机生成" : ""}；无数据不代表零工时。` : "请先将现有人工项目与 Project Profile 显式关联,再查询、导入或生成月度报告。"}
+      {data.profileId ? `${search.month} 尚无已保存报告。${data.capabilities?.generate ? "点击生成报告即可自动采集并保存。" : "连接已授权的本机采集服务后即可直接生成。"}无数据不代表零工时。` : "请先将现有人工项目与 Project Profile 显式关联,再查询或生成月度报告。"}
     </div>}
   </div>;
 }

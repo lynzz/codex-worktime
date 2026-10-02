@@ -25,7 +25,9 @@ Codex Worktime is a local tool for creating auditable reports of Codex usage for
 - **Input Digest**: A content identity for equivalent normalized Report Snapshots, independent of generation time. It does not identify private raw histories.
 - **Undated Cursor Statistics**: Lifetime counts for transcript envelopes without usable timestamps. They cannot be assigned to a reporting month and never produce verified or estimated time.
 - **Report Profile Mapping**: An explicit association between one existing owned manual project and a stable Project Profile identifier. It is not a name match and does not copy local roots.
-- **Report Run**: A user's finite local report-generation attempt, progressing through queued/running to succeeded or failed. Success references a complete saved Report Snapshot; it is not a Run Interval.
+- **Report Run**: A user's finite report-generation attempt, initiated from a signed-in local or hosted Web and progressing through queued/running to succeeded or failed. Success references a complete saved Report Snapshot; it is not a Run Interval.
+- **Report Collector**: A Manual User's authorized computer that reads its registered Project Profiles and local evidence to build Report Snapshots. It is not a cloud filesystem or a public report-sharing identity.
+- **Collection Connection**: Current availability of an authorized Report Collector for a Manual User and its registered Project Profiles. An unavailable connection does not prevent viewing already saved Report Snapshots.
 
 ## V1 boundary
 

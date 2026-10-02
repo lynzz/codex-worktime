@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-10-02; spec #23, deliveries #24–#29.
+Accepted — 2026-10-02; spec #23, deliveries #24–#29. Amended after user acceptance to include hosted one-click generation through an authorized local Report Collector.
 
 ## Context
 
@@ -24,7 +24,10 @@ The existing Chinese offline reports need to be available in the manual-timeshee
 - Human-declared Entry storage and backup/reset remain governed by ADR-0003. No manual tables are modified by report generation. Manual reset and local AI deletion leave saved Snapshots and exported files intact; this delivery does not introduce report deletion or automatic retention.
 - Manual Users authorize report mappings, runs, queries, imports and exports through their existing Login Session (ADR-0005). A mapping associates one existing owned manual project with a stable Profile ID without storing local roots or creating manual records.
 - Complete immutable Snapshots and their daily rows commit atomically. Equivalent business digests converge under a unique key, excluding generation time; changed evidence or pricing produces a new version. Current-version ordering uses successful save time, then snapshot ID. A generated run succeeds in the same transaction as its complete Snapshot.
-- Node hosts expose only their trusted account's registered Profiles. Each process incarnation atomically publishes its own local registration; recovery identifies dead or retired incarnations and never interrupts a live peer. Cloudflare composition has no local collector or native analyzer dependency, and retains import/query/export capability.
+- Node hosts expose only their trusted account's registered Profiles. Each process incarnation atomically publishes its own local registration; recovery identifies dead or retired incarnations and never interrupts a live peer.
+- **The hosted generation amendment supersedes the original cloud query/import-only composition.** An authenticated hosted Web creates a finite Report Run for a live, owner-matched Report Collector. The already running Node host receives and atomically claims the request through outbound Neon connections, performs collection locally, and atomically saves the complete Snapshot and successful run. No localhost page, CLI report command or manual file import is required.
+- Collection Connections use database-clock leases and whitelisted Profile identifiers/display names, never roots or raw histories. Heartbeats continue during collection. Expired, closed or retired collectors cannot complete unfinished runs; interrupted work preserves prior snapshots and allows explicit retry. Workers retain no analyzer/native dependency and never scan a cloud or browser filesystem.
+- This uses the existing report-run model for a narrow generation handoff, not a general-purpose distributed job system. Keeping an authorized local host online is a real prerequisite. An offline connection is shown explicitly, rather than presenting a disabled feature as successful deployment or requiring routine export/import. Outbound database handoff avoids exposing a public laptop endpoint or weakening same-origin browser security.
 - Downloads render the selected saved Snapshot without rescanning. Explicit version selections, including pending navigation, take precedence over automatic opening of a completed run.
 
 ## Consequences

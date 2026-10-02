@@ -2,7 +2,11 @@ import type { ReportDetail, ReportSummary, ReportRun } from "@codex-worktime/tim
 export type { ReportSummary, ReportRun } from "@codex-worktime/timesheet-server";
 export type SavedReport = ReportDetail;
 
-export type ReportCapabilities = { localGenerate: boolean; import: true; query: true; export: true };
+export type ReportCapabilities = {
+  generate: boolean;
+  generationMode: "local" | "connected" | "offline";
+  import: true; query: true; export: true;
+};
 export type ReportProfiles = {
   profiles: { profileId: string; projectId: string; displayName: string }[];
   availableProfiles: { profileId: string; displayName: string }[];
@@ -20,7 +24,7 @@ const reportErrors: Record<string, string> = {
   PROJECT_ALREADY_MAPPED: "该人工项目已关联另一个 Profile。一个人工项目只能关联一个 Profile。",
   REPORT_PROFILE_NOT_FOUND: "该 Profile 尚未关联当前账号的项目,或本机没有授权使用此 Profile。",
   INVALID_REPORT_SELECTION: "请选择合法月份与已关联 Profile",
-  LOCAL_GENERATION_UNSUPPORTED: "当前环境不支持本机生成,请导入本机导出的报告 JSON。",
+  REPORT_COLLECTOR_OFFLINE: "本机采集服务离线。保持已授权的本机工时速记服务运行后,刷新连接状态即可直接生成，无需执行 CLI 或导入 JSON。",
   REPORT_RUN_NOT_FOUND: "生成运行不存在或不属于当前账号",
   REPORT_NOT_FOUND: "报告版本不存在或不属于当前账号",
   INVALID_REPORT_EXPORT_FORMAT: "不支持该下载格式,请选择 JSON 或 HTML",

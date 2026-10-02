@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Temporal } from "@js-temporal/polyfill";
 import { eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -6,8 +6,9 @@ import { calculateReportDigest, monthPeriod, reportSnapshotSchema, type ReportSn
 import { createApi } from "../src/api";
 import { addUser } from "../src/accounts";
 import { getDb } from "../src/db";
-import { projects, reportDays, reportProfiles, reportRuns, reportSnapshots, users } from "../src/schema";
-import { reportDetailSchema, reportRunSchema, reportSummarySchema, type ReportCollector, type ReportRun } from "../src/reports";
+import { projects, reportCollectors, reportDays, reportProfiles, reportRuns, reportSnapshots, users } from "../src/schema";
+import { reportDetailSchema, reportRunSchema, reportSummarySchema, startReportCollection,
+  type ReportCollection, type ReportCollector, type ReportRun } from "../src/reports";
 
 const hasTestDb = Boolean(process.env.NEON_TEST_DATABASE_URL);
 const reportListSchema = z.object({ currentId: z.string().nullable(), versions: z.array(reportSummarySchema) }).strict();
@@ -59,12 +60,15 @@ describe.skipIf(!hasTestDb)("immutable private report API on isolated Neon", { t
   const cloud = createApi();
   const instanceId = `report-test-${crypto.randomUUID()}`;
   let collect: ReportCollector["collect"] = async () => fixture();
-  const collector: ReportCollector = {
-    instanceId,
-    profiles: async (userId) => userId === ownerA ? [{ profileId: "fixture", displayName: "Registered local profile" }] : [],
-    collect: (...args) => collect(...args),
-  };
-  let local = createApi({ reportCollector: collector });
+  let collector: ReportCollector;
+  let local = createApi();
+  const collections: ReportCollection[] = [];
+
+  async function startHost(host = collector) {
+    const lifecycle = await startReportCollection(host);
+    collections.push(lifecycle);
+    return lifecycle;
+  }
 
   function request(path: string, method = "GET", body?: unknown, cookie = cookieA, app = cloud) {
     return app.request(path, { method, headers: { cookie, "content-type": "application/json" },
@@ -96,6 +100,7 @@ describe.skipIf(!hasTestDb)("immutable private report API on isolated Neon", { t
       db.delete(reportRuns).where(inArray(reportRuns.userId, owners)),
       db.delete(reportSnapshots).where(inArray(reportSnapshots.userId, owners)),
       db.delete(reportProfiles).where(inArray(reportProfiles.userId, owners)),
+      db.delete(reportCollectors).where(inArray(reportCollectors.userId, owners)),
     ]);
   }
   beforeAll(async () => {
@@ -121,8 +126,16 @@ describe.skipIf(!hasTestDb)("immutable private report API on isolated Neon", { t
       { id: projectA, userId: ownerA, name: "A" }, { id: projectB, userId: ownerB, name: "B" },
     ]).onConflictDoNothing();
     collect = async () => fixture();
+    collector = {
+      instanceId, ownerId: async () => ownerA,
+      profiles: async (userId) => userId === ownerA ? [{ profileId: "fixture", displayName: "Registered local profile" }] : [],
+      collect: (...args) => collect(...args),
+    };
     local = createApi({ reportCollector: collector });
     expect((await map()).status).toBe(200);
+  }, 60000);
+  afterEach(async () => {
+    await Promise.all(collections.splice(0).map((collection) => collection.close()));
   }, 60000);
   afterAll(async () => {
     if (ownerA && ownerB) {
@@ -182,7 +195,8 @@ describe.skipIf(!hasTestDb)("immutable private report API on isolated Neon", { t
     expect((await request("/api/reports/import", "POST", { ...await fixture(), userId: ownerB })).status).toBe(400);
     expect((await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-10" }, cookieB, local)).status).toBe(404);
     expect((await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-10" }, "", local)).status).toBe(401);
-    expect(await (await request("/api/reports/capabilities", "GET", undefined, cookieB, local)).json()).toEqual({ localGenerate: false, import: true, query: true, export: true });
+    expect(await (await request("/api/reports/capabilities", "GET", undefined, cookieB, local)).json())
+      .toEqual(expect.objectContaining({ generate: false, generationMode: "offline" }));
     const b = await imported(await fixture(), cookieB);
     expect(b.id).not.toBe(saved.id);
     const foreignRun = await getDb().insert(reportRuns).values({ id: crypto.randomUUID(), userId: ownerB, profileId: "fixture", month: "2026-10", instanceId: "foreign", status: "queued" }).returning();
@@ -255,7 +269,6 @@ describe.skipIf(!hasTestDb)("immutable private report API on isolated Neon", { t
     expect(html).not.toContain("<b>safe & complete</b>");
     expect((await request(`/api/reports/${saved.id}/export?format=pdf`)).status).toBe(400);
     expect((await request("/api/reports/missing/export?format=html")).status).toBe(404);
-    expect((await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-10" })).status).toBe(501);
   });
 
   it("converges concurrent collection/import and returns only safe owner-scoped runs", async () => {
@@ -309,18 +322,236 @@ describe.skipIf(!hasTestDb)("immutable private report API on isolated Neon", { t
     expect(recovered.snapshot.totals.estimatedCostCents).toBe(1542);
   });
 
-  it("recovers only interrupted runs from the current collector instance", async () => {
+  it("lets hosted requests use only the owner's safe connected profiles and immutable saved results", async () => {
+    const saved = await imported();
+    collect = async () => ({ ...saved.snapshot, generatedAt: "2026-10-09T00:00:00.000Z" });
+    const lifecycle = await startHost();
+    expect(await (await request("/api/reports/capabilities")).json())
+      .toEqual(expect.objectContaining({ generate: true, generationMode: "connected" }));
+    expect(await (await request("/api/reports/capabilities", "GET", undefined, cookieA, local)).json())
+      .toEqual(expect.objectContaining({ generate: true, generationMode: "local" }));
+    expect(await (await request("/api/report-profiles")).json()).toEqual(expect.objectContaining({
+      availableProfiles: [{ profileId: "fixture", displayName: "Registered local profile" }],
+    }));
+    expect((await map(cookieB, projectB)).status).toBe(200);
+    expect(await (await request("/api/report-profiles", "GET", undefined, cookieB)).json())
+      .toEqual(expect.objectContaining({ availableProfiles: [] }));
+    expect((await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-10" }, cookieB)).status).toBe(404);
+    expect((await request("/api/reports/generate", "POST", {
+      profileId: "fixture", month: "2026-10", root: "/Users/private/source",
+    })).status).toBe(400);
+    const response = await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-10" });
+    expect(response.status).toBe(202);
+    const { runId } = generatedSchema.parse(await response.json());
+    expect(await waitRun(runId, cloud)).toEqual(expect.objectContaining({
+      status: "succeeded", snapshotId: saved.id, errorCode: null,
+    }));
+    expect(await (await request(`/api/reports/${saved.id}`)).json()).toEqual(saved);
+    expect((await request(`/api/report-runs/${runId}`, "GET", undefined, cookieB)).status).toBe(404);
+    await lifecycle.close();
+    expect(await (await request("/api/reports/capabilities")).json())
+      .toEqual(expect.objectContaining({ generate: false, generationMode: "offline" }));
+    const offline = await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-10" });
+    expect(offline.status).toBe(503);
+    expect(await offline.json()).toEqual({ error: "REPORT_COLLECTOR_OFFLINE" });
+    expect((await waitRun(runId, cloud)).status).toBe("succeeded");
+  });
+
+  it("claims concurrent hosted and direct jobs once and serializes collection per incarnation", async () => {
+    const calls: string[] = [];
+    let active = 0; let maxActive = 0;
+    collect = async (_userId, _profileId, month) => {
+      calls.push(month);
+      active++; maxActive = Math.max(maxActive, active);
+      try { return await fixture(month); } finally { active--; }
+    };
+    await Promise.all([startHost(), startHost()]);
+    const months = ["2026-04", "2026-05", "2026-06", "2026-07"];
+    const responses = await Promise.all(months.map((month, index) =>
+      request("/api/reports/generate", "POST", { profileId: "fixture", month }, cookieA, index % 2 ? local : cloud)));
+    const ids = await Promise.all(responses.map(async (response) => {
+      expect(response.status).toBe(202);
+      return generatedSchema.parse(await response.json()).runId;
+    }));
+    const runs = await Promise.all(ids.map((id) => waitRun(id, cloud)));
+    expect(runs.map((run) => run.status)).toEqual(months.map(() => "succeeded"));
+    expect(calls.sort()).toEqual(months);
+    expect(maxActive).toBe(1);
+    for (const run of runs) {
+      const saved = reportDetailSchema.parse(await (await request(`/api/reports/${run.snapshotId}`)).json());
+      expect(saved.snapshot.period.month).toBe(run.month);
+    }
+  });
+
+  it("rejects a late result after its run changes incarnation while preserving valid peer work", async () => {
+    const { promise: collecting, resolve: entered } = Promise.withResolvers<void>();
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    const peer = { ...collector, instanceId: `fenced-peer-${crypto.randomUUID()}` };
+    const peerLifecycle = await startHost(peer);
+    collect = async (_owner, _profile, month) => {
+      if (month === "2026-10") { entered(); await gate; }
+      return fixture(month);
+    };
+    const lifecycle = await startHost();
+    try {
+      const first = await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-10" }, cookieA, local);
+      const firstId = generatedSchema.parse(await first.json()).runId;
+      await collecting;
+      await getDb().update(reportRuns).set({ instanceId: peer.instanceId }).where(eq(reportRuns.id, firstId));
+      const second = await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-09" }, cookieA, local);
+      const secondId = generatedSchema.parse(await second.json()).runId;
+      release();
+      // Serial processing makes this success proof that the earlier save attempt has finished.
+      expect((await waitRun(secondId, cloud)).status).toBe("succeeded");
+      expect(await (await request(`/api/report-runs/${firstId}`)).json()).toEqual(expect.objectContaining({
+        status: "running", snapshotId: null, errorCode: null,
+      }));
+      const listing = reportListSchema.parse(await (await request("/api/reports?profileId=fixture&month=2026-10")).json());
+      expect(listing).toEqual({ currentId: null, versions: [] });
+      await peerLifecycle.close();
+      expect((await waitRun(firstId, cloud)).errorCode).toBe("INTERRUPTED");
+    } finally {
+      release();
+      await lifecycle.close();
+    }
+  });
+
+  it("does not advertise or enqueue through a collector whose startup recovery fails", async () => {
+    const broken: ReportCollector = {
+      ...collector,
+      recoveryComplete: async () => { throw new Error("private /Users/secret/history sk-private-token"); },
+    };
+    await expect(startReportCollection(broken)).rejects.toBeInstanceOf(Error);
+    expect(await (await request("/api/reports/capabilities")).json())
+      .toEqual(expect.objectContaining({ generate: false, generationMode: "offline" }));
+    const offline = await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-10" });
+    expect(offline.status).toBe(503);
+    expect(await offline.json()).toEqual({ error: "REPORT_COLLECTOR_OFFLINE" });
+    const localFailure = await request("/api/reports/capabilities", "GET", undefined, cookieA, createApi({ reportCollector: broken }));
+    expect(localFailure.status).toBe(503);
+    expect(await localFailure.json()).toEqual({ error: "REPORT_STORAGE_FAILED" });
+  });
+
+  it("interrupts queued and running work after lease expiry and rejects an expired direct result", async () => {
+    const { promise: collecting, resolve: entered } = Promise.withResolvers<void>();
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    collect = async () => { entered(); await gate; return fixture(); };
+    const lifecycle = await startHost();
+    const response = await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-10" }, cookieA, local);
+    const { runId } = generatedSchema.parse(await response.json());
+    try {
+      await collecting;
+      const queuedId = crypto.randomUUID();
+      await getDb().insert(reportRuns).values({ id: queuedId, userId: ownerA, profileId: "fixture",
+        month: "2026-09", instanceId, status: "queued" });
+      await getDb().update(reportCollectors).set({ leaseExpiresAt: sql`clock_timestamp() - interval '1 second'` })
+        .where(eq(reportCollectors.instanceId, instanceId));
+      for (const id of [runId, queuedId]) {
+        expect(await waitRun(id, cloud)).toEqual(expect.objectContaining({
+          status: "failed", errorCode: "INTERRUPTED", snapshotId: null,
+        }));
+      }
+      expect(await (await request("/api/reports/capabilities")).json())
+        .toEqual(expect.objectContaining({ generate: false, generationMode: "offline" }));
+      const offline = await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-10" });
+      expect(offline.status).toBe(503);
+      expect(await offline.json()).toEqual({ error: "REPORT_COLLECTOR_OFFLINE" });
+    } finally {
+      release();
+      await lifecycle.close();
+    }
+    expect(await getDb().select().from(reportSnapshots).where(eq(reportSnapshots.userId, ownerA))).toEqual([]);
+    expect((await waitRun(runId, cloud)).errorCode).toBe("INTERRUPTED");
+  });
+
+  it("renews the database lease while a direct collection is blocked past its initial deadline", async () => {
+    const { promise: collecting, resolve: entered } = Promise.withResolvers<void>();
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    collect = async () => { entered(); await gate; return fixture(); };
+    const lifecycle = await startHost();
+    const response = await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-10" }, cookieA, local);
+    const { runId } = generatedSchema.parse(await response.json());
+    try {
+      await collecting;
+      const [initial] = await getDb().update(reportCollectors)
+        .set({ leaseExpiresAt: sql`clock_timestamp() + interval '18 seconds'` })
+        .where(eq(reportCollectors.instanceId, instanceId)).returning({ deadline: reportCollectors.leaseExpiresAt });
+      // Neon leases use the database clock; fake JavaScript time cannot exercise expiry/renewal.
+      const waitDeadline = Date.now() + 30000;
+      let deadlinePassed = false;
+      while (Date.now() < waitDeadline) {
+        const clock = await getDb().execute(sql`select clock_timestamp() >= ${initial!.deadline.toISOString()}::timestamptz as passed`);
+        if (clock.rows[0]?.passed === true) { deadlinePassed = true; break; }
+        const tick = Promise.withResolvers<void>();
+        setTimeout(tick.resolve, 250);
+        await tick.promise;
+      }
+      expect(deadlinePassed).toBe(true);
+      expect(await (await request(`/api/report-runs/${runId}`)).json()).toEqual(expect.objectContaining({ status: "running" }));
+      expect(await (await request("/api/reports/capabilities")).json())
+        .toEqual(expect.objectContaining({ generate: true, generationMode: "connected" }));
+      release();
+      expect((await waitRun(runId, cloud)).status).toBe("succeeded");
+    } finally {
+      release();
+      await lifecycle.close();
+    }
+  });
+
+  it("fences shutdown synchronously and never saves a collection released after close begins", async () => {
+    const { promise: collecting, resolve: entered } = Promise.withResolvers<void>();
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    collect = async () => { entered(); await gate; return fixture(); };
+    const lifecycle = await startHost();
+    const response = await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-10" });
+    const { runId } = generatedSchema.parse(await response.json());
+    await collecting;
+    const closing = lifecycle.close();
+    release();
+    await closing;
+    expect(await waitRun(runId, cloud)).toEqual(expect.objectContaining({
+      status: "failed", errorCode: "INTERRUPTED", snapshotId: null,
+    }));
+    expect(await getDb().select().from(reportSnapshots).where(eq(reportSnapshots.userId, ownerA))).toEqual([]);
+  });
+
+  it("fences a retired host even when its local collection completes after replacement", async () => {
+    const { promise: collecting, resolve: entered } = Promise.withResolvers<void>();
+    const { promise: gate, resolve: release } = Promise.withResolvers<void>();
+    const oldCollector = { ...collector, collect: async () => { entered(); await gate; return fixture(); } };
+    const oldLifecycle = await startHost(oldCollector);
+    const response = await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-10" });
+    const { runId } = generatedSchema.parse(await response.json());
+    try {
+      await collecting;
+      await startHost({ ...collector, instanceId: `replacement-${crypto.randomUUID()}`, interruptedInstanceIds: [instanceId] });
+      expect(await waitRun(runId, cloud)).toEqual(expect.objectContaining({ status: "failed", errorCode: "INTERRUPTED" }));
+    } finally {
+      release();
+      await oldLifecycle.close();
+    }
+    expect(await getDb().select().from(reportSnapshots).where(eq(reportSnapshots.userId, ownerA))).toEqual([]);
+  });
+
+  it("recovers dead and retired incarnations without interrupting a live registered peer", async () => {
     const db = getDb();
-    const ownRun = crypto.randomUUID(); const otherRun = crypto.randomUUID();
+    const retired = `retired-${crypto.randomUUID()}`;
+    const dead = `dead-${crypto.randomUUID()}`;
+    const peer = { ...collector, instanceId: `peer-${crypto.randomUUID()}` };
+    await startHost(peer);
+    const retiredRun = crypto.randomUUID(); const deadRun = crypto.randomUUID(); const peerRun = crypto.randomUUID();
     await db.insert(reportRuns).values([
-      { id: ownRun, userId: ownerA, profileId: "fixture", month: "2026-10", instanceId, status: "running" },
-      { id: otherRun, userId: ownerA, profileId: "fixture", month: "2026-10", instanceId: "other-live-instance", status: "running" },
+      { id: retiredRun, userId: ownerA, profileId: "fixture", month: "2026-10", instanceId: retired, status: "running" },
+      { id: deadRun, userId: ownerA, profileId: "fixture", month: "2026-10", instanceId: dead, status: "queued" },
+      { id: peerRun, userId: ownerA, profileId: "fixture", month: "2026-10", instanceId: peer.instanceId, status: "running" },
     ]);
-    const restarted = createApi({ reportCollector: collector });
-    const recovered = await request(`/api/report-runs/${ownRun}`, "GET", undefined, cookieA, restarted);
-    expect(await recovered.json()).toEqual(expect.objectContaining({ status: "failed", errorCode: "INTERRUPTED", snapshotId: null }));
-    const other = await request(`/api/report-runs/${otherRun}`, "GET", undefined, cookieA, restarted);
-    expect(await other.json()).toEqual(expect.objectContaining({ status: "running", errorCode: null }));
+    const restarted = createApi({ reportCollector: { ...collector, interruptedInstanceIds: [retired] } });
+    for (const id of [retiredRun, deadRun]) {
+      expect(await (await request(`/api/report-runs/${id}`, "GET", undefined, cookieA, restarted)).json())
+        .toEqual(expect.objectContaining({ status: "failed", errorCode: "INTERRUPTED", snapshotId: null }));
+    }
+    expect(await (await request(`/api/report-runs/${peerRun}`, "GET", undefined, cookieA, restarted)).json())
+      .toEqual(expect.objectContaining({ status: "running", errorCode: null }));
     expect((await request("/api/reports/generate", "POST", { profileId: "fixture", month: "2026-13" }, cookieA, restarted)).status).toBe(400);
     expect((await request("/api/reports/generate", "POST", { profileId: "unknown", month: "2026-10" }, cookieA, restarted)).status).toBe(404);
   });

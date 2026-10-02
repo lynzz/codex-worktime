@@ -76,9 +76,11 @@ export async function createLocalReportCollector(options: LocalReportCollectorOp
   const dataDirectory = resolve(configuredDirectory);
   const reservation = await reserveInstance(dataDirectory, options.instanceKey ?? process.env.PORT ?? "8787")
     .catch(() => { throw new Error("LOCAL_INSTANCE_UNAVAILABLE"); });
+  async function ownerId() {
+    return (await findUserByUsername(username!))?.id;
+  }
   async function registeredProfiles(userId: string) {
-    const owner = await findUserByUsername(username!);
-    if (!owner || owner.id !== userId) return [];
+    if (await ownerId() !== userId) return [];
     let files: string[];
     try { files = await readdir(join(dataDirectory, "profiles")); } catch { return []; }
     const profiles = [];
@@ -98,6 +100,7 @@ export async function createLocalReportCollector(options: LocalReportCollectorOp
     interruptedInstanceIds: reservation.interruptedInstanceIds,
     recoveryComplete: reservation.recoveryComplete,
     close: reservation.close,
+    ownerId,
     profiles: registeredProfiles,
     async collect(userId, profileId, month) {
       identifier.parse(profileId);

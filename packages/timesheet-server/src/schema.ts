@@ -60,6 +60,16 @@ export const reportProfiles = pgTable("report_profiles", {
   uniqueIndex("report_profiles_owner_project_unique").on(table.userId, table.projectId),
 ]);
 
+// Only safe profile metadata crosses the hosted/local collection seam.
+export const reportCollectors = pgTable("report_collectors", {
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "restrict" }),
+  instanceId: text("instance_id").notNull(),
+  profiles: jsonb("profiles").$type<{ profileId: string; displayName: string }[]>().notNull(),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.instanceId] }),
+]);
+
 export const reportSnapshots = pgTable("report_snapshots", {
   id: text("id").primaryKey(),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "restrict" }),

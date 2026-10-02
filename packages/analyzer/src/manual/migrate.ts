@@ -13,7 +13,7 @@ export async function migrateManualAccounts(
 ): Promise<{ phase: string; applied: number }> {
   const tag = phase === "nullable" ? "0003_accounts-nullable"
     : phase === "owned" ? "0004_accounts-owned"
-    : phase === "reports" ? "0005_reports" : null;
+    : phase === "reports" ? "0006_report-collectors" : null;
   if (!tag) throw new Error("迁移 phase 应为 nullable、owned 或 reports");
   const migrationsFolder = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../timesheet-server/drizzle");
   const journal = z.object({

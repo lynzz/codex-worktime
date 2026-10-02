@@ -158,7 +158,7 @@ After the account migration above, apply the report schema once:
 npm run analyzer -- manual migrate --phase reports
 ```
 
-To generate reports directly in the local Web, configure `CODEX_WORKTIME_DATA_DIR` to the existing application-data directory and `CODEX_WORKTIME_LOCAL_USER` to the account you log in with. Registered Project Profiles are read from `<data-directory>/profiles/<profile-id>.json`; the filename must match the Profile's `id`. Existing local registrations can be reused. `CODEX_WORKTIME_HISTORY_HOME` optionally selects the host's history home. Only the configured account can use the host's registered Profiles; HTTP requests never supply filesystem paths.
+To enable one-click generation from either the local or deployed Web, run a trusted Node host connected to the same Neon database, configure `CODEX_WORKTIME_DATA_DIR` to the existing application-data directory and `CODEX_WORKTIME_LOCAL_USER` to the account you log in with. Registered Project Profiles are read from `<data-directory>/profiles/<profile-id>.json`; the filename must match the Profile's `id`. Existing local registrations can be reused. `CODEX_WORKTIME_HISTORY_HOME` optionally selects the host's history home. Only the configured account can use the host's registered Profiles; HTTP requests never supply filesystem paths.
 
 For example, on a trusted macOS Node host with an existing `lzz` account:
 
@@ -170,9 +170,15 @@ npm run serve
 
 Use the same Node major version for dependency installation and the Node server: `better-sqlite3` is a native addon. Verification uses Node 24; after changing Node versions, reinstall or rebuild the native dependency before collecting reports.
 
-In **报告**, explicitly associate an existing manual project with a registered Profile ID, select a month, and click **本机生成报告**. The Web starts collection, displays progress, saves the complete snapshot to Neon, and opens the saved report; routine use requires neither CLI generation nor manual JSON import. Generation returns a tracked run; success means the complete snapshot and every calendar day have been committed. Failed or interrupted runs preserve the previous successful report and allow retry. Host incarnations have distinct identities and atomically published local registrations; restart recovery marks only dead or retired incarnations interrupted, not live peers.
+In **报告**, explicitly associate an existing manual project with a registered Profile ID, select a month, and click **生成报告**. This works in the deployed Web as well as localhost: the trusted host automatically receives the request, collects evidence, saves the complete snapshot to Neon, and the page opens the saved report. Routine use requires neither a CLI report-generation command nor JSON import, and the localhost page does not need to be open.
 
-Cloudflare Workers cannot read your computer's Git repositories, assistant histories or native SQLite store. For Cloudflare or another host without local collection, JSON export/import remains an alternative:
+Keep the authorized computer and Node host online during generation. The hosted page shows its Collection Connection and disables generation when no authorized collector is available; **刷新报告与连接** reloads availability. Previously saved reports remain readable while the collector is offline. Generation returns a tracked run; success means the complete snapshot and every calendar day have been committed. Failed or interrupted runs preserve the previous successful report and allow retry.
+
+If the host sleeps or loses its database connection long enough for its 60-second lease to expire, restart the local Node host to establish a fresh incarnation before generating again. Expired incarnations are deliberately not revived, so late results cannot turn interrupted runs into success.
+
+Cloudflare Workers still do not read your computer's Git repositories, histories or SQLite. A Node host registers only its owner's safe Profile identifiers and display names, keeps a database-clock availability lease, and claims its own queued Report Runs through outbound Neon connections. It needs no public inbound port or browser-to-localhost request. Atomic claiming, incarnation fencing and lease-expiry recovery prevent two hosts from completing the same run or a retired host from publishing a late result. No raw local evidence or roots enter the registry.
+
+The collapsed **手动导入 JSON（备份迁移,可选）** remains an alternative for transferring a previously exported snapshot, not a required generation step:
 
 ```sh
 npm run analyzer -- report-month \
@@ -182,7 +188,7 @@ npm run analyzer -- report-month \
   --json-output /absolute/path/to/report.json
 ```
 
-Cloudflare builds contain no local collector, Git scanner or native SQLite dependency. Their report page offers JSON import, saved-version queries and HTML/JSON downloads, with local export instructions. Configure `DATABASE_URL` and `SESSION_SECRET` and apply migrations before deployment.
+Cloudflare builds contain no local collector, Git scanner or native SQLite dependency. Their report page can request generation from an online authorized collector, query saved versions, and download HTML/JSON; it does not tell users to execute CLI commands and import files as the normal workflow. Configure `DATABASE_URL` and `SESSION_SECRET` and apply the report migrations (including the collector registry) before deployment.
 
 Snapshots use strict schema v2, integer milliseconds, full Shanghai calendar months, canonical content digests and fixed pricing. Repeated equivalent inputs reuse the same immutable version; changed evidence or pricing creates a new version. Current means latest successful save, with stable ID ordering for ties. Version selections survive refresh; completing generation does not override an explicit pending selection. Hours/person-days round for display only; final cost rounds from precise duration to cents. Missing evidence remains unavailable rather than zero.
 
