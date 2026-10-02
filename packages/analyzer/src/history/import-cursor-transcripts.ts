@@ -21,6 +21,10 @@ export type CursorTranscriptImportResult = {
   directPromptCount: number;
   completedTurnCount: number;
   missingTimestampCount: number;
+  undatedSessionCount: number;
+  undatedPromptCount: number;
+  undatedCompletedTurnCount: number;
+  hasUnreadableSource: boolean;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -63,6 +67,15 @@ export async function importCursorTranscripts(input: unknown): Promise<CursorTra
   let completedTurnCount = 0;
   let missingTimestampCount = 0;
   let hasUnreadableSource = false;
+  let undatedPromptCount = 0;
+  let undatedCompletedTurnCount = 0;
+  const undatedSessions = new Set<string>();
+  const countUndated = (source: { sessionId: string }, type: string) => {
+    undatedSessions.add(source.sessionId);
+    if (type === "UserPromptSubmit") undatedPromptCount += 1;
+    else undatedCompletedTurnCount += 1;
+    missingTimestampCount += 1;
+  };
 
   for (const source of sources) {
     try {
@@ -87,7 +100,7 @@ export async function importCursorTranscripts(input: unknown): Promise<CursorTra
         else completedTurnCount += 1;
         const timestamp = recordTimestamp(record);
         if (!timestamp) {
-          missingTimestampCount += 1;
+          countUndated(source, type);
           continue;
         }
         let reportDate: string;
@@ -95,7 +108,7 @@ export async function importCursorTranscripts(input: unknown): Promise<CursorTra
           reportDate = Temporal.Instant.from(timestamp).toZonedDateTimeISO("Asia/Shanghai").toPlainDate().toString();
           observedDates.add(reportDate);
         } catch {
-          missingTimestampCount += 1;
+          countUndated(source, type);
           continue;
         }
         const id = createHash("sha256")
@@ -117,6 +130,10 @@ export async function importCursorTranscripts(input: unknown): Promise<CursorTra
     detectedSessionCount: sources.length,
     directPromptCount,
     completedTurnCount,
-    missingTimestampCount
+    missingTimestampCount,
+    undatedSessionCount: undatedSessions.size,
+    undatedPromptCount,
+    undatedCompletedTurnCount,
+    hasUnreadableSource
   };
 }

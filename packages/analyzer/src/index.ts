@@ -6,6 +6,7 @@ import { Command } from "commander";
 import { sanitizeHookEvent } from "./hooks/sanitize-hook-event.js";
 import { backupLocalData, deleteLocalData } from "./lifecycle/manage-local-data.js";
 import { generateProjectReport } from "./reporting/generate-project-report.js";
+import { generateMonthlyReport } from "./reporting/generate-monthly-report.js";
 
 type ReportCommandOptions = {
   profile: string;
@@ -69,6 +70,22 @@ export async function runCli(argv: string[], runtime: CliRuntime = {}): Promise<
   const stdout = runtime.stdout ?? process.stdout;
   const program = new Command();
   program.name("codex-worktime").description("Generate privacy-safe local Codex worktime reports.");
+
+  program.command("report-month")
+    .description("Export a registered Project Profile's Shanghai month as HTML and versioned JSON.")
+    .requiredOption("--profile-id <id>", "registered Project Profile id")
+    .requiredOption("--month <YYYY-MM>", "full Asia/Shanghai month")
+    .requiredOption("--data-dir <path>", "application data directory containing profiles/<id>.json")
+    .requiredOption("--output <path>", "offline HTML output path")
+    .requiredOption("--json-output <path>", "private snapshot JSON output path")
+    .option("--events <path>", "additional sanitized event JSON file")
+    .option("--history-home <path>", "history home directory; defaults to the current user's home")
+    .action(async (options: { profileId: string; month: string; dataDir: string; output: string; jsonOutput: string; events?: string; historyHome?: string }) => {
+      const result = await generateMonthlyReport({ profileId: options.profileId, month: options.month,
+        dataDirectory: options.dataDir, htmlPath: options.output, jsonPath: options.jsonOutput,
+        eventsPath: options.events, historyHome: options.historyHome, generatedAt: runtime.now?.() });
+      stdout.write(`${JSON.stringify({ matchedEventCount: result.matchedEventCount, coverage: result.coverage })}\n`);
+    });
 
   program
     .command("report")

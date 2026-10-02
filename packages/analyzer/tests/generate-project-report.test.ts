@@ -1,6 +1,8 @@
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 
 import { generateProjectReport } from "../src/reporting/generate-project-report.js";
@@ -15,6 +17,42 @@ const profile = {
 };
 
 describe("generateProjectReport", () => {
+  it("keeps daily commit messages alongside estimates and coverage, escapes HTML, and excludes the new column from customer reports", async () => {
+    const git = promisify(execFile);
+    const root = await mkdtemp(join(tmpdir(), "codex-worktime-commit-messages-"));
+    const output = await mkdtemp(join(tmpdir(), "codex-worktime-message-report-"));
+    await git("git", ["init", root]);
+    await git("git", ["-C", root, "config", "user.name", "Test"]);
+    await git("git", ["-C", root, "config", "user.email", "test@example.com"]);
+    for (const [index, message] of ["feat(report): <script>alert(1)</script>", "fix(report): 支持中文汇总"].entries()) {
+      const timestamp = `2026-09-01T0${index + 1}:00:00Z`;
+      await git("git", ["-C", root, "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", message], {
+        env: { ...process.env, GIT_AUTHOR_DATE: timestamp, GIT_COMMITTER_DATE: timestamp }
+      });
+    }
+    const input = {
+      profile: { id: "message-test", displayName: "Messages", roots: [{ id: "root", path: root }] },
+      events: [],
+      coverage: [{ date: "2026-09-01", status: "available" }],
+      dateRange: { from: "2026-09-01", to: "2026-09-01" },
+      applicationDataDirectory: output,
+      databasePath: join(output, "analytics.sqlite"),
+      htmlPath: join(output, "internal.html")
+    };
+    await generateProjectReport(input);
+    const html = await readFile(input.htmlPath, "utf8");
+    expect(html).toContain("<th>提交历史汇总</th><th>当天 Commit Message</th>");
+    expect(html).toContain("fix(report): 支持中文汇总");
+    expect(html).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    expect(html).not.toContain("<script>alert(1)</script>");
+    expect(html).toContain('<strong class="number">1.00 小时</strong>');
+    expect(html).toContain("report（提交 scope） × 1.00 小时");
+    expect(html).toContain("2026-09-01: 可用");
+    const customerPath = join(output, "customer.html");
+    await generateProjectReport({ ...input, view: "customer", htmlPath: customerPath });
+    expect(await readFile(customerPath, "utf8")).not.toContain("当天 Commit Message");
+  });
+
   it("unifies matching roots and produces a privacy-safe offline report", async () => {
     const outputDirectory = await mkdtemp(join(tmpdir(), "codex-worktime-report-"));
     const databasePath = join(outputDirectory, "analytics.sqlite");

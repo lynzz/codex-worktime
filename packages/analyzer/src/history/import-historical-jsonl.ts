@@ -21,6 +21,7 @@ const inputSchema = z.object({
 type HistoricalEvent = Extract<GenerateProjectReportInput["events"], unknown>;
 
 export type HistoricalImportResult = {
+  hasUnreadableSource: boolean;
   events: HistoricalEvent[];
   coverage: CoverageEntry[];
 };
@@ -137,6 +138,7 @@ export async function importHistoricalJsonl(input: unknown): Promise<HistoricalI
   }
 
   return {
+    hasUnreadableSource,
     events,
     coverage: dateRange
       ? datesInRange(dateRange.from, dateRange.to, matchingDates, observedDates, hasUnreadableSource)

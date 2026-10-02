@@ -17,6 +17,11 @@ Codex Worktime is a local tool for creating auditable reports of Codex usage for
 - **Human-declared Entry**: A user-recorded timesheet row for one calendar day (`{ date, projectId, title, minutes, taskId?, category?, note? }`). It is day-granular with no start/end times, lives in the Neon-hosted manual timesheet store, and is never merged into Active or Run Interval totals (ADR-0003).
 - **Task Row**: A pre-configured (project, task title) pair pinned as a week-grid row. Entries link to it by id while keeping a title snapshot; deleting a Task Row preserves its entries.
 - **Ad-hoc Entry**: A Human-declared Entry not linked to any Task Row, aggregated for display by project + title so that no recorded data disappears.
+- **Report Snapshot**: A privacy-filtered report for one Project Profile and full Asia/Shanghai calendar month. Verified metrics, Coverage and completeness, and non-verified estimates remain separate; raw sources and private identities are excluded.
+- **Commit Cadence Estimate**: A non-verified estimate from immediately consecutive, deduplicated commits in the same grouping, capped at one hour per gap. It is not Active/Run time or Human-declared time; the first commit contributes no duration.
+- **Commit Group**: A Conventional Commit scope, or a matching subject for unscoped commits. It groups delivery evidence but is not a Feature.
+- **Input Digest**: A content identity for equivalent normalized Report Snapshots, independent of generation time. It does not identify private raw histories.
+- **Undated Cursor Statistics**: Lifetime counts for transcript envelopes without usable timestamps. They cannot be assigned to a reporting month and never produce verified or estimated time.
 
 ## V1 boundary
 

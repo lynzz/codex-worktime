@@ -29,7 +29,7 @@ describe("estimateFeatureCommitTime", () => {
       { id: "four", subject: "feat(analysis): fourth", authoredAt: "2026-07-01T17:20:00Z" },
       { id: "five", subject: "feat(ui): fifth", authoredAt: "2026-07-01T17:30:00Z" },
       { id: "five", subject: "feat(ui): duplicate", authoredAt: "2026-07-01T17:30:00Z" }
-    ])).toEqual([{ date: "2026-07-02", commitCount: 5, summary: "report（提交 scope） × 2 · admin（提交 scope） × 1 · analysis（提交 scope） × 1 · 等 1 项" }]);
+    ])).toEqual([{ date: "2026-07-02", commitCount: 5, summary: "report（提交 scope） × 2 · admin（提交 scope） × 1 · analysis（提交 scope） × 1 · 等 1 项", messages: ["feat(report): first", "fix(report): second", "feat(admin): third", "feat(analysis): fourth", "feat(ui): duplicate"] }]);
   });
 
   it("assigns each estimated same-scope gap to the later commit's Asia/Shanghai day", () => {
@@ -37,6 +37,6 @@ describe("estimateFeatureCommitTime", () => {
       { id: "one", subject: "feat(report): first", authoredAt: "2026-07-01T15:50:00Z" },
       { id: "two", subject: "fix(report): second", authoredAt: "2026-07-01T16:10:00Z" },
       { id: "three", subject: "fix(report): third", authoredAt: "2026-07-01T16:40:00Z" }
-    ])).toEqual([{ date: "2026-07-02", estimatedMinutes: 50, summary: "report（提交 scope） × 50 分钟" }]);
+    ])).toEqual([{ date: "2026-07-02", estimatedMinutes: 50, summary: "report（提交 scope） × 0.83 小时" }]);
   });
 });

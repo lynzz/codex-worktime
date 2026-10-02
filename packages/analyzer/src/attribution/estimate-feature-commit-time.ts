@@ -1,134 +1,84 @@
-export type CommitTimingEvidence = {
-  id: string;
-  subject: string;
-  authoredAt: string;
-};
+import { Temporal } from "@js-temporal/polyfill";
 
-export type FeatureCommitEstimate = {
-  featureKey: string;
-  featureName: string;
-  commitCount: number;
-  estimatedMinutes: number;
-};
+export type CommitTimingEvidence = { id: string; subject: string; authoredAt: string };
 
-export type DailyCommitSummary = {
-  date: string;
-  commitCount: number;
-  summary: string;
-};
+// Legacy API names retained for callers; a commit scope is not a real Feature.
+export type FeatureCommitEstimate = { featureKey: string; featureName: string; commitCount: number; estimatedMinutes: number };
+export type DailyCommitSummary = { date: string; commitCount: number; summary: string; messages: string[] };
+export type DailyCommitEstimate = { date: string; estimatedMinutes: number; summary: string };
 
-export type DailyCommitEstimate = {
-  date: string;
-  estimatedMinutes: number;
-  summary: string;
-};
-
-const maximumGapMinutes = 60;
-
-function featureForSubject(subject: string): Pick<FeatureCommitEstimate, "featureKey" | "featureName"> {
+function groupForSubject(subject: string) {
   const conventional = /^(?:[a-z]+)(?:\(([^)]+)\))?!?:\s*(.+)$/iu.exec(subject.trim());
   const scope = conventional?.[1]?.trim();
-  if (scope) {
-    const featureKey = scope.toLocaleLowerCase();
-    return { featureKey, featureName: `${scope}（提交 scope）` };
-  }
   const summary = conventional?.[2]?.trim() || subject.trim();
-  return { featureKey: `subject:${summary.toLocaleLowerCase()}`, featureName: summary };
+  return scope ? { key: scope.toLowerCase(), label: `${scope}（提交 scope）` }
+    : { key: `subject:${summary.toLowerCase()}`, label: summary };
 }
 
-function uniqueCommits(commits: readonly CommitTimingEvidence[]): CommitTimingEvidence[] {
-  return [...new Map(commits.map((commit) => [commit.id, commit])).values()];
-}
-
-export function summarizeCommitsByDay(commits: readonly CommitTimingEvidence[]): DailyCommitSummary[] {
-  const days = new Map<string, Map<string, { name: string; count: number }>>();
-  for (const commit of uniqueCommits(commits)) {
-    let date: string;
-    try {
-      date = Temporal.Instant.from(commit.authoredAt).toZonedDateTimeISO("Asia/Shanghai").toPlainDate().toString();
-    } catch {
-      continue;
-    }
-    const feature = featureForSubject(commit.subject);
-    const features = days.get(date) ?? new Map();
-    const value = features.get(feature.featureKey) ?? { name: feature.featureName, count: 0 };
-    value.count += 1;
-    features.set(feature.featureKey, value);
-    days.set(date, features);
-  }
-  return [...days.entries()]
-    .map(([date, features]) => {
-      const grouped = [...features.values()].sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
-      const commitCount = grouped.reduce((count, feature) => count + feature.count, 0);
-      const displayed = grouped.slice(0, 3).map((feature) => `${feature.name} × ${feature.count}`);
-      const remainingCount = grouped.length - displayed.length;
-      return { date, commitCount, summary: `${displayed.join(" · ")}${remainingCount ? ` · 等 ${remainingCount} 项` : ""}` };
-    })
-    .sort((left, right) => left.date.localeCompare(right.date));
-}
-
-export function summarizeEstimatedCommitTimeByDay(commits: readonly CommitTimingEvidence[]): DailyCommitEstimate[] {
-  const ordered = uniqueCommits(commits).sort((left, right) => left.authoredAt.localeCompare(right.authoredAt));
-  const days = new Map<string, Map<string, { name: string; minutes: number }>>();
-  let previous: { featureKey: string; timestamp: number } | undefined;
+/** The single cadence algorithm used by both legacy reports and snapshots. */
+export function summarizeCommitActivity(commits: readonly CommitTimingEvidence[], dateRange?: { from: string; to: string }) {
+  const ordered = [...new Map(commits.map((commit) => [commit.id.trim(), commit])).values()]
+    .filter((commit) => Number.isFinite(Date.parse(commit.authoredAt)))
+    .sort((a, b) => Date.parse(a.authoredAt) - Date.parse(b.authoredAt) || a.id.localeCompare(b.id));
+  const days = new Map<string, { date: string; commitCount: number; messages: Map<string, number>;
+    groups: Map<string, { key: string; label: string; commitCount: number; estimatedMs: number }> }>();
+  let previous: { key: string; timestamp: number } | undefined;
   for (const commit of ordered) {
     const timestamp = Date.parse(commit.authoredAt);
-    if (Number.isNaN(timestamp)) continue;
-    const feature = featureForSubject(commit.subject);
-    if (previous?.featureKey === feature.featureKey) {
-      const minutes = Math.min(Math.floor((timestamp - previous.timestamp) / 60_000), maximumGapMinutes);
-      if (minutes > 0) {
-        const date = Temporal.Instant.from(commit.authoredAt).toZonedDateTimeISO("Asia/Shanghai").toPlainDate().toString();
-        const features = days.get(date) ?? new Map();
-        const value = features.get(feature.featureKey) ?? { name: feature.featureName, minutes: 0 };
-        value.minutes += minutes;
-        features.set(feature.featureKey, value);
-        days.set(date, features);
-      }
-    }
-    previous = { featureKey: feature.featureKey, timestamp };
+    const date = Temporal.Instant.from(commit.authoredAt).toZonedDateTimeISO("Asia/Shanghai").toPlainDate().toString();
+    const grouping = groupForSubject(commit.subject);
+    const day = days.get(date) ?? { date, commitCount: 0, messages: new Map<string, number>(), groups: new Map() };
+    day.commitCount += 1;
+    const title = commit.subject.trim();
+    day.messages.set(title, (day.messages.get(title) ?? 0) + 1);
+    const group = day.groups.get(grouping.key) ?? { ...grouping, commitCount: 0, estimatedMs: 0 };
+    group.commitCount += 1;
+    if (previous?.key === grouping.key) group.estimatedMs += Math.max(0, Math.min(timestamp - previous.timestamp, 3_600_000));
+    day.groups.set(grouping.key, group);
+    days.set(date, day);
+    previous = { key: grouping.key, timestamp };
   }
-  return [...days.entries()]
-    .map(([date, features]) => {
-      const grouped = [...features.values()].sort((left, right) => right.minutes - left.minutes || left.name.localeCompare(right.name));
-      const estimatedMinutes = grouped.reduce((total, feature) => total + feature.minutes, 0);
-      const displayed = grouped.slice(0, 3).map((feature) => `${feature.name} × ${feature.minutes} 分钟`);
-      const remainingCount = grouped.length - displayed.length;
-      return { date, estimatedMinutes, summary: `${displayed.join(" · ")}${remainingCount ? ` · 等 ${remainingCount} 项` : ""}` };
-    })
-    .sort((left, right) => left.date.localeCompare(right.date));
+  return [...days.values()].filter((day) => !dateRange || (day.date >= dateRange.from && day.date <= dateRange.to))
+    .sort((a, b) => a.date.localeCompare(b.date)).map((day) => ({
+    date: day.date, commitCount: day.commitCount,
+    commitMessages: [...day.messages].map(([title, count]) => ({ title, count })),
+    commitGroups: [...day.groups.values()].sort((a, b) => a.label.localeCompare(b.label)),
+    commitEstimateMs: [...day.groups.values()].reduce((sum, group) => sum + group.estimatedMs, 0)
+  }));
 }
 
-/**
- * Estimates work only from immediately consecutive commits with the same
- * Conventional Commit scope. It deliberately does not bridge a change of
- * scope or charge time to the first commit in a sequence.
- */
-export function estimateFeatureCommitTime(commits: readonly CommitTimingEvidence[]): FeatureCommitEstimate[] {
-  const ordered = uniqueCommits(commits).sort((left, right) => left.authoredAt.localeCompare(right.authoredAt));
-  const estimates = new Map<string, FeatureCommitEstimate>();
-  let previous: { featureKey: string; timestamp: number } | undefined;
-
-  for (const commit of ordered) {
-    const timestamp = Date.parse(commit.authoredAt);
-    if (Number.isNaN(timestamp)) continue;
-    const feature = featureForSubject(commit.subject);
-    const estimate = estimates.get(feature.featureKey) ?? {
-      ...feature,
-      commitCount: 0,
-      estimatedMinutes: 0
-    };
-    estimate.commitCount += 1;
-    if (previous?.featureKey === feature.featureKey) {
-      const gapMinutes = Math.floor((timestamp - previous.timestamp) / 60_000);
-      if (gapMinutes > 0) estimate.estimatedMinutes += Math.min(gapMinutes, maximumGapMinutes);
-    }
-    estimates.set(feature.featureKey, estimate);
-    previous = { featureKey: feature.featureKey, timestamp };
-  }
-
-  return [...estimates.values()]
-    .filter((estimate) => estimate.estimatedMinutes > 0)
-    .sort((left, right) => right.estimatedMinutes - left.estimatedMinutes || right.commitCount - left.commitCount || left.featureName.localeCompare(right.featureName));
+function topGroupSummary(values: string[]) {
+  return `${values.slice(0, 3).join(" · ")}${values.length > 3 ? ` · 等 ${values.length - 3} 项` : ""}`;
 }
-import { Temporal } from "@js-temporal/polyfill";
+
+export function summarizeCommitsByDay(commits: readonly CommitTimingEvidence[], dateRange?: { from: string; to: string }): DailyCommitSummary[] {
+  return summarizeCommitActivity(commits, dateRange).map((day) => ({
+    date: day.date, commitCount: day.commitCount,
+    summary: topGroupSummary([...day.commitGroups].sort((a, b) => b.commitCount - a.commitCount || a.label.localeCompare(b.label))
+      .map((group) => `${group.label} × ${group.commitCount}`)),
+    messages: day.commitMessages.map((message) => message.count > 1 ? `${message.title} × ${message.count}` : message.title)
+  }));
+}
+
+export function summarizeEstimatedCommitTimeByDay(commits: readonly CommitTimingEvidence[], dateRange?: { from: string; to: string }): DailyCommitEstimate[] {
+  return summarizeCommitActivity(commits, dateRange).filter((day) => day.commitEstimateMs > 0).map((day) => ({
+    date: day.date, estimatedMinutes: day.commitEstimateMs / 60000,
+    summary: topGroupSummary(day.commitGroups.filter((group) => group.estimatedMs > 0)
+      .sort((a, b) => b.estimatedMs - a.estimatedMs || a.label.localeCompare(b.label))
+      .map((group) => `${group.label} × ${(group.estimatedMs / 3600000).toFixed(2)} 小时`))
+  }));
+}
+
+export function estimateFeatureCommitTime(commits: readonly CommitTimingEvidence[], dateRange?: { from: string; to: string }): FeatureCommitEstimate[] {
+  const groups = new Map<string, FeatureCommitEstimate>();
+  for (const day of summarizeCommitActivity(commits, dateRange)) {
+    for (const group of day.commitGroups) {
+      const value = groups.get(group.key) ?? { featureKey: group.key, featureName: group.label, commitCount: 0, estimatedMinutes: 0 };
+      value.commitCount += group.commitCount;
+      value.estimatedMinutes += group.estimatedMs / 60000;
+      groups.set(group.key, value);
+    }
+  }
+  return [...groups.values()].filter((group) => group.estimatedMinutes > 0)
+    .sort((a, b) => b.estimatedMinutes - a.estimatedMinutes || b.commitCount - a.commitCount || a.featureName.localeCompare(b.featureName));
+}

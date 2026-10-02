@@ -38,6 +38,24 @@ npm start -- report \
 
 All date boundaries are Asia/Shanghai. A date range clips verified interval totals at its local midnight boundaries. Feature-linked totals are rendered for a range only when their supplied attribution evidence carries that exact range; otherwise the report makes no feature-duration claim. Active and Run are verified event-bounded measurements. Feature mapping is inferred delivery evidence and always shows its Confidence; V1 does not include inferred human time. `no data` and `unknown` coverage are never zero-time claims.
 
+## 月度 HTML / JSON 快照（#24）
+
+在应用数据目录的 `profiles/<id>.json` 登记 Project Profile（`id`、`displayName`、`roots: [{ id, path }]`），再执行：
+
+```sh
+npm run analyzer -- report-month \
+  --profile-id demo-project --month 2026-08 \
+  --data-dir /path/to/application-data \
+  --output /path/to/exports/demo-project-2026-08.html \
+  --json-output /path/to/exports/demo-project-2026-08.json
+```
+
+命令复用该目录的 `<id>.sqlite` Hook 事件库，并只读扫描当前用户 `~/.codex/{sessions,archived_sessions}`、`~/.claude/projects` 和对应项目的 `~/.cursor/projects` 主会话记录。`--history-home <目录>` 可覆盖历史记录主目录；`--events <文件>` 可补充脱敏事件 JSON。月份按上海时区完整日历月处理，跨月区间按边界裁剪。
+
+HTML 从同一份版本化 JSON 快照渲染，全部日明细、标题重复次数和 scope 分组保留。核验 AI 活跃、运行区间与提交节奏推测分开；无完整证据用 `null` / 无法确认，不填零工时。推测费用按精确时长以 1,200 元 / 8 小时计算，最终四舍五入到分。无时间戳 Cursor 记录仅计入“无法定月累计”。
+
+快照不导出 roots、会话身份或原始事件内容；提交文本做保守隐私过滤并进行 HTML 转义。分享前仍需审核业务文本。此票仅提供本地导出，**尚未接入 Web 或上传 Neon**；后续 Web 票复用 `@codex-worktime/report-core` 的严格契约。算法/隐私政策见 ADR-0004。
+
 ## Incremental Hook ingestion
 
 Use the same profile, database, and report output for Codex lifecycle Hook commands. The command accepts one Hook JSON payload on standard input, retains only the approved event metadata, and refreshes the same offline report:

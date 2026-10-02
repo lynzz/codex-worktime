@@ -108,6 +108,7 @@ describe("importHistoricalJsonl", () => {
     });
 
     expect(result).toEqual({
+      hasUnreadableSource: true,
       events: [],
       coverage: [{ date: "2026-08-22", status: "unknown" }]
     });

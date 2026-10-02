@@ -17,7 +17,7 @@ const inputSchema = z.object({
 
 type HistoricalEvent = Extract<GenerateProjectReportInput["events"], unknown>;
 
-export type ClaudeCodeImportResult = { events: HistoricalEvent[]; coverage: CoverageEntry[] };
+export type ClaudeCodeImportResult = { events: HistoricalEvent[]; coverage: CoverageEntry[]; hasUnreadableSource: boolean };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -107,5 +107,5 @@ export async function importClaudeCodeJsonl(input: unknown): Promise<ClaudeCodeI
     }
   }
 
-  return { events, coverage: dateRange ? datesInRange(dateRange.from, dateRange.to, matchingDates, observedDates, hasUnreadableSource) : [] };
+  return { events, coverage: dateRange ? datesInRange(dateRange.from, dateRange.to, matchingDates, observedDates, hasUnreadableSource) : [], hasUnreadableSource };
 }
