@@ -3,8 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
 import { beforeAll, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
-import { getDb, entries } from "@codex-worktime/timesheet-server";
+import { addUser, getDb, entries, projects, tasks, users } from "@codex-worktime/timesheet-server";
 import { runCli } from "../src/index";
 
 // 从仓库根 .env.local 取测试库连接串
@@ -56,7 +55,9 @@ describe.skipIf(!hasTestDb)("manual import(原型 JSON 幂等迁移)", () => {
 
   beforeAll(async () => {
     process.env.DATABASE_URL = process.env.NEON_TEST_DATABASE_URL;
-    await getDb().execute(sql`truncate table entries, tasks, projects cascade`);
+    const db = getDb();
+    await db.batch([db.delete(entries), db.delete(tasks), db.delete(projects), db.delete(users)]);
+    await addUser("import_owner", "manual-import-test-password");
     dir = await mkdtemp(path.join(os.tmpdir(), "timesheet-import-"));
     file = path.join(dir, "prototype.json");
     await writeFile(file, JSON.stringify(fixture), "utf8");
@@ -68,7 +69,7 @@ describe.skipIf(!hasTestDb)("manual import(原型 JSON 幂等迁移)", () => {
     entries: { inserted: number; skipped: number };
   }> {
     out = [];
-    await runCli(["node", "codex-worktime", "manual", "import", file], {
+    await runCli(["node", "codex-worktime", "manual", "import", file, "--user", "import_owner"], {
       stdout: { write: (s: string) => void out.push(s) },
     });
     return JSON.parse(out.join("")) as never;

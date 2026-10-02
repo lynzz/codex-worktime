@@ -1,0 +1,9 @@
+# ADR-0005: Private manual timesheet ownership
+
+Accepted — 2026-10-02, spec #22. The former shared password authorized access to every manual record; each Manual User now owns a private set of projects, Task Rows and Human-declared Entries. Authenticate locally with salted PBKDF2-SHA256 passwords and user-bound HMAC login sessions, and derive API ownership exclusively from the verified session rather than accepting a client-supplied owner; account administration remains a Node CLI operation, independent of Cloudflare Access.
+
+Migrate existing data in two atomic phases: introduce nullable ownership, explicitly claim all unowned records for the named legacy owner after checking every association, then require ownership and add owner-scoped indexes. Preserve original ids, timestamps, dates, minutes, titles, categories, notes and project/task links; never reset or reconstruct historical records. An already-present legacy `entries.created_at` column may be explicitly adopted only after validating its schema, without rewriting timestamps.
+
+Global record ids remain stable for idempotent imports. Reject foreign ids and links, including collisions found inside the import transaction after concurrent preflight reads. Restrictive task foreign keys prevent deletion from silently altering another owner's entry; the API explicitly detaches only the deleting user's entries before removing a Task Row. Reset and export operate on one owner, never the entire manual store.
+
+A session lasts 30 days; browser logout clears its cookie but does not provide server-side token revocation. Password resets affect future logins; rotating the signing secret invalidates all existing sessions. Missing signing configuration must fail closed. AI analysis Sessions, Project Profiles and Report Snapshots are unchanged and remain separate from this manual-data boundary.

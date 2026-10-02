@@ -95,7 +95,36 @@ npm start -- data delete \
 
 ## Manual timesheet (human-declared hours)
 
-A local web app for recording outsourced, human-declared work hours by day — a separate data domain from the AI-time accounting above (ADR-0003); the two are never merged. Data lives in a Neon serverless Postgres project; the connection string is expected in `.env.local` at the repo root (`DATABASE_URL`, `DATABASE_URL_UNPOOLED`, written by `neon link`).
+A local web app for recording outsourced, human-declared work hours by day — a separate data domain from the AI-time accounting above (ADR-0003); the two are never merged. Each Manual User owns a private set of projects, task rows, and entries (ADR-0005). Data lives in Neon serverless Postgres; `.env.local` holds `DATABASE_URL`, `DATABASE_URL_UNPOOLED`, and a strong random `SESSION_SECRET`. Authentication is always required; omitting the signing secret fails closed. The old shared `ACCESS_PASSWORD` and `x-internal-key` bypass are no longer supported.
+
+### Non-destructive account migration
+
+Stop the old application before migrating and retain a private database backup or an independent Neon backup branch. Rehearse on a separate branch first; destructive integration tests must use their own `NEON_TEST_DATABASE_URL`, never the production or rehearsal branch.
+
+```sh
+# A: nullable ownership; existing ids, dates, minutes, notes and links stay intact.
+npm run analyzer -- manual migrate --phase nullable
+
+# Create the account using a hidden terminal password prompt.
+npm run analyzer -- manual user add lzz
+npm run analyzer -- manual user claim-orphans lzz
+
+# Verify the original rows and totals, then B: NOT NULL ownership and indexes.
+npm run analyzer -- manual migrate --phase owned
+```
+
+`claim-orphans` only fills unowned rows. It validates the entire project/task/entry graph and claims all three tables in one transaction; inconsistent links roll back everything. Repeating it returns zero counts. Migration B refuses any remaining unowned rows without partially applying the phase. Neither phase uses reset, truncate, or deletion.
+
+If the legacy database already has `entries.created_at` but migration `0002` is unrecorded, inspect its type, nullability, and default first, then explicitly run `manual migrate --phase nullable --adopt-existing-created-at`. The command validates the existing column and records the baseline without changing timestamps; it is not a general migration-repair switch.
+
+```sh
+npm run analyzer -- manual user list
+npm run analyzer -- manual user passwd lzz
+```
+
+Usernames contain 2–32 lowercase letters, digits, `_`, or `-`. Passwords are nonempty and at most 1024 UTF-8 bytes; only salted PBKDF2-SHA256 hashes are stored. CLI password input is hidden; automation can inject `MANUAL_USER_PASSWORD` privately, never as a command argument. Account listings expose only username and creation time.
+
+### Start and use
 
 ```sh
 # One-time: build the web app, then start it on http://localhost:8787
@@ -111,11 +140,54 @@ Three coequal views share one dataset: 周网格 (task-row × day grid, whole-ce
 Migrate recorded hours from the throwaway prototype:
 
 ```sh
-npm run analyzer -- manual import /path/to/timesheet.PROTOTYPE-WIPE-ME.json
+npm run analyzer -- manual import /path/to/timesheet.PROTOTYPE-WIPE-ME.json --user lzz
 # → {"projects":{"inserted":N,"skipped":0},"tasks":{...},"entries":{...}}; re-running skips everything
 ```
 
-Backup/reset for this domain are in-app export and the double-confirmed 清空 button in the ⚙ panel; `data backup`/`data delete` still manage only the local AI-event store.
+Backup/reset for this domain are the signed-in account's in-app export and double-confirmed 清空 button in the ⚙ panel. Reset deletes only that user's manual entries, tasks and projects; `data backup`/`data delete` still manage only the local AI-event store. Request payloads cannot choose an owner; API reads, writes, imports and exports use the authenticated account. Foreign record ids and links return 404.
+
+Login sessions last 30 days in a signed HttpOnly, SameSite=Lax cookie (Secure in production). The rail shows the current username and logout. Logout clears the browser cookie; login/logout replace the full page to discard the previous account's cached data. Invalid/expired cookies return 401 and page loaders redirect to login. Password changes affect future logins but do not revoke already-issued sessions; rotating `SESSION_SECRET` invalidates all signed sessions.
+
+## Saved monthly reports
+
+The authenticated **报告** page displays privacy-filtered AI and Git reports from independent Neon tables. Verified Active/Run, non-verified Commit Cadence Estimates, and human-declared timesheets remain separate; generating or importing a report never adds manual entries.
+
+After the account migration above, apply the report schema once:
+
+```sh
+npm run analyzer -- manual migrate --phase reports
+```
+
+To generate reports directly in the local Web, configure `CODEX_WORKTIME_DATA_DIR` to the existing application-data directory and `CODEX_WORKTIME_LOCAL_USER` to the account you log in with. Registered Project Profiles are read from `<data-directory>/profiles/<profile-id>.json`; the filename must match the Profile's `id`. Existing local registrations can be reused. `CODEX_WORKTIME_HISTORY_HOME` optionally selects the host's history home. Only the configured account can use the host's registered Profiles; HTTP requests never supply filesystem paths.
+
+For example, on a trusted macOS Node host with an existing `lzz` account:
+
+```sh
+export CODEX_WORKTIME_DATA_DIR="$HOME/Library/Application Support/codex-worktime"
+export CODEX_WORKTIME_LOCAL_USER=lzz
+npm run serve
+```
+
+Use the same Node major version for dependency installation and the Node server: `better-sqlite3` is a native addon. Verification uses Node 24; after changing Node versions, reinstall or rebuild the native dependency before collecting reports.
+
+In **报告**, explicitly associate an existing manual project with a registered Profile ID, select a month, and click **本机生成报告**. The Web starts collection, displays progress, saves the complete snapshot to Neon, and opens the saved report; routine use requires neither CLI generation nor manual JSON import. Generation returns a tracked run; success means the complete snapshot and every calendar day have been committed. Failed or interrupted runs preserve the previous successful report and allow retry. Host incarnations have distinct identities and atomically published local registrations; restart recovery marks only dead or retired incarnations interrupted, not live peers.
+
+Cloudflare Workers cannot read your computer's Git repositories, assistant histories or native SQLite store. For Cloudflare or another host without local collection, JSON export/import remains an alternative:
+
+```sh
+npm run analyzer -- report-month \
+  --profile-id my-project --month 2026-08 \
+  --data-dir /absolute/path/to/application-data \
+  --output /absolute/path/to/report.html \
+  --json-output /absolute/path/to/report.json
+```
+
+Cloudflare builds contain no local collector, Git scanner or native SQLite dependency. Their report page offers JSON import, saved-version queries and HTML/JSON downloads, with local export instructions. Configure `DATABASE_URL` and `SESSION_SECRET` and apply migrations before deployment.
+
+Snapshots use strict schema v2, integer milliseconds, full Shanghai calendar months, canonical content digests and fixed pricing. Repeated equivalent inputs reuse the same immutable version; changed evidence or pricing creates a new version. Current means latest successful save, with stable ID ordering for ties. Version selections survive refresh; completing generation does not override an explicit pending selection. Hours/person-days round for display only; final cost rounds from precise duration to cents. Missing evidence remains unavailable rather than zero.
+
+Both downloads use the selected saved snapshot without reading local sources. JSON can be reimported without duplicating reports; HTML works offline. Raw histories, bodies, session identities, roots and recognizable credentials—including quoted credential assignments—are excluded. Review exports before external sharing: defensive text filtering cannot establish that arbitrary prose is public. Manual reset/import/export and local AI deletion do not delete saved reports; this release provides no report editing, deletion, XLSX or PDF export.
+
 
 ## Deploy (Cloudflare Workers)
 
@@ -126,5 +198,6 @@ CLOUDFLARE_API_TOKEN=... npx wrangler deploy   # DATABASE_URL 已在 worker secr
 ```
 
 Live: https://gongshi-suji.lynzz168.workers.dev
-Auth plan: Cloudflare Access on a custom domain (requires enabling Zero
-Trust + a zone; workers.dev cannot be protected by Access policies).
+Workers require `DATABASE_URL` and `SESSION_SECRET` secrets. Create users and migrate the database through the Node CLI before deploying this version; the Worker exposes no account-administration endpoint. Cloudflare Access can be an additional edge policy on a custom domain, not a replacement for per-user ownership.
+
+For the legacy cutover, disable both the Worker’s `workers.dev` route and Preview URLs before migration, then deploy the account-aware version with a fresh `SESSION_SECRET` and remove the legacy `ACCESS_PASSWORD` secret. The checked-in configuration keeps Preview URLs disabled so old versions cannot expose the pre-ownership application; only the current authenticated production route is published. A migration backup remains private and separate from live traffic.

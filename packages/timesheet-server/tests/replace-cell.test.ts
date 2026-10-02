@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
-import { api } from "../src/api";
+
+import { testApi as api, resetTestData, TEST_USER_ID } from "./setup";
 import { getDb } from "../src/db";
 import { entries, projects } from "../src/schema";
 
@@ -23,8 +23,8 @@ describe.skipIf(!hasTestDb)("replace-cell(周网格整格替换)", () => {
 
   beforeEach(async () => {
     const db = getDb();
-    await db.execute(sql`truncate table entries, tasks, projects cascade`);
-    await db.insert(projects).values({ id: "p1", name: "EQA", archived: false });
+    await resetTestData();
+    await db.insert(projects).values({ id: "p1", userId: TEST_USER_ID, name: "EQA", archived: false });
     const task = (await (await post("/api/tasks", {
       projectId: "p1",
       title: "联调",

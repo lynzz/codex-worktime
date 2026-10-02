@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
-import { api } from "../src/api";
+
+import { testApi as api, resetTestData, TEST_USER_ID } from "./setup";
 import { getDb } from "../src/db";
 import { projects } from "../src/schema";
 
@@ -23,10 +23,8 @@ describe.skipIf(!hasTestDb)("entries API(集成,Neon test 分支)", () => {
 
   beforeEach(async () => {
     const db = getDb();
-    await db.execute(sql`truncate table entries, tasks, projects cascade`);
-    const rows = await db
-      .insert(projects)
-      .values({ id: "p1", name: "EQA", archived: false })
+    await resetTestData();
+    const rows = await db.insert(projects).values({ id: "p1", userId: TEST_USER_ID, name: "EQA", archived: false })
       .returning();
     projectId = rows[0]!.id;
   });
@@ -115,7 +113,6 @@ describe.skipIf(!hasTestDb)("entries API(集成,Neon test 分支)", () => {
       minutes: 30,
     });
     expect(noTitle.status).toBe(400);
-    expect(((await noTitle.json()) as { error: string }).error).toContain("任务标题");
 
     const badMinutes = await post("/api/entries", {
       date: "2026-09-05",

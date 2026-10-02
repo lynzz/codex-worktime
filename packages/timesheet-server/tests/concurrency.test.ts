@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
-import { api } from "../src/api";
+
+import { testApi as api, resetTestData, TEST_USER_ID } from "./setup";
 import { getDb } from "../src/db";
 import { entries, projects } from "../src/schema";
 
@@ -20,8 +20,8 @@ describe.skipIf(!hasTestDb)("增量接口并发与一键清空", () => {
   });
 
   beforeEach(async () => {
-    await getDb().execute(sql`truncate table entries, tasks, projects cascade`);
-    await getDb().insert(projects).values({ id: "p1", name: "EQA", archived: false });
+    await resetTestData();
+    await getDb().insert(projects).values({ id: "p1", userId: TEST_USER_ID, name: "EQA", archived: false });
   });
 
   it("并发冒测:两个客户端交错写不同条目,双方均不丢失(消除原型整包覆盖缺陷)", async () => {

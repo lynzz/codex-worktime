@@ -1,16 +1,16 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { and, asc, count, eq, gte, isNull, lte, or, sum } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lte, or, sum } from "drizzle-orm";
 import { getDb } from "../db.js";
 import { entries, projects, tasks } from "../schema.js";
+import type { AppEnv } from "../auth.js";
 import {
-  cellReplaceMatches,
   entryCreateSchema,
   entryPatchSchema,
   type Entry,
 } from "@codex-worktime/timesheet-core";
 
-export const entriesRouter = new Hono();
+export const entriesRouter = new Hono<AppEnv>();
 
 entriesRouter.get("/", async (c) => {
   const from = c.req.query("from");
@@ -19,14 +19,14 @@ entriesRouter.get("/", async (c) => {
       (to !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(to))) {
     return c.json({ error: "from/to 应为 YYYY-MM-DD" }, 400);
   }
-  const conditions = [];
+  const conditions = [eq(entries.userId, c.get("userId"))];
   if (from) conditions.push(gte(entries.date, from));
   if (to) conditions.push(lte(entries.date, to));
 
   const rows = await getDb()
     .select()
     .from(entries)
-    .where(conditions.length ? and(...conditions) : undefined)
+    .where(and(...conditions))
     .orderBy(asc(entries.date), asc(entries.title), asc(entries.id));
   return c.json(rows as unknown as Entry[]);
 });
@@ -40,14 +40,14 @@ entriesRouter.post("/", async (c) => {
   const [project] = await db
     .select()
     .from(projects)
-    .where(eq(projects.id, parsed.data.projectId));
+    .where(and(eq(projects.id, parsed.data.projectId), eq(projects.userId, c.get("userId"))));
   if (!project) return c.json({ error: "项目不存在" }, 404);
 
   // 自动关联:同项目下与任务行标题精确匹配时挂上(原型验证语义)
   const sameProjectTasks = await db
     .select()
     .from(tasks)
-    .where(eq(tasks.projectId, parsed.data.projectId));
+    .where(and(eq(tasks.projectId, parsed.data.projectId), eq(tasks.userId, c.get("userId"))));
   const matchedTask = sameProjectTasks.find(
     (t) => t.title === parsed.data.title,
   );
@@ -56,6 +56,7 @@ entriesRouter.post("/", async (c) => {
     .insert(entries)
     .values({
       id: crypto.randomUUID(),
+      userId: c.get("userId"),
       date: parsed.data.date,
       projectId: parsed.data.projectId,
       title: parsed.data.title,
@@ -72,7 +73,8 @@ entriesRouter.post("/", async (c) => {
 
 // 全部条目的累计分钟(页头总工时徽章)
 entriesRouter.get("/total", async (c) => {
-  const rows = await getDb().select({ value: sum(entries.minutes) }).from(entries);
+  const rows = await getDb().select({ value: sum(entries.minutes) }).from(entries)
+    .where(eq(entries.userId, c.get("userId")));
   return c.json({ minutes: rows[0]?.value ?? 0 });
 });
 
@@ -104,12 +106,13 @@ entriesRouter.post("/replace-cell", async (c) => {
   const minutes = input.minutes ?? null;
 
   const db = getDb();
-  const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
+  const userId = c.get("userId");
+  const [project] = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
   if (!project) return c.json({ error: "项目不存在" }, 404);
 
   let title: string | null = null;
   if (taskId) {
-    const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
+    const [task] = await db.select().from(tasks).where(and(eq(tasks.id, taskId), eq(tasks.userId, userId)));
     if (!task || task.projectId !== projectId) {
       return c.json({ error: "任务行不存在" }, 404);
     }
@@ -124,56 +127,37 @@ entriesRouter.post("/replace-cell", async (c) => {
 
   // 任务格:taskId 匹配 或 同名未关联(与 core 匹配语义一致);
   // 散录格:未挂行 + 项目+标题
-  const dayEntries = await db
-    .select()
-    .from(entries)
-    .where(
-      taskId
-        ? and(
-            eq(entries.date, date),
-            or(
-              eq(entries.taskId, taskId),
-              and(
-                isNull(entries.taskId),
-                eq(entries.projectId, projectId),
-                eq(entries.title, title!),
-              ),
-            ),
-          )
-        : and(
-            eq(entries.date, date),
-            isNull(entries.taskId),
-            eq(entries.projectId, projectId),
-            eq(entries.title, title),
-          ),
-    );
-  const ids = dayEntries
-    .filter((x) => cellReplaceMatches({ date, projectId, taskId, title }, x as unknown as Parameters<typeof cellReplaceMatches>[1]))
-    .map((x) => x.id);
-
-  const result = await db.transaction(async (tx) => {
-    for (const id of ids) {
-      await tx.delete(entries).where(eq(entries.id, id));
-    }
-    if (minutes !== null) {
-      const rows = await tx
-        .insert(entries)
-        .values({
-          id: crypto.randomUUID(),
-          date,
-          projectId,
-          title: title!,
-          minutes,
-          taskId,
-          category: null,
-          note: null,
-        })
-        .returning();
-      return rows[0] ?? null;
-    }
-    return null;
-  });
-  return c.json({ ok: true, entry: result as { id: string } | null });
+  const cellCondition = and(
+    eq(entries.userId, userId),
+    eq(entries.date, date),
+    eq(entries.projectId, projectId),
+    taskId
+      ? or(
+          eq(entries.taskId, taskId),
+          and(isNull(entries.taskId), eq(entries.title, title!)),
+        )
+      : and(isNull(entries.taskId), eq(entries.title, title!)),
+  );
+  const clear = db.delete(entries).where(cellCondition);
+  if (minutes === null) {
+    await db.batch([clear]);
+    return c.json({ ok: true, entry: null });
+  }
+  const [, inserted] = await db.batch([
+    clear,
+    db.insert(entries).values({
+      id: crypto.randomUUID(),
+      userId,
+      date,
+      projectId,
+      title: title!,
+      minutes,
+      taskId,
+      category: null,
+      note: null,
+    }).returning(),
+  ]);
+  return c.json({ ok: true, entry: inserted[0] ?? null });
 });
 
 entriesRouter.patch("/:id", async (c) => {
@@ -184,7 +168,7 @@ entriesRouter.patch("/:id", async (c) => {
   const updated = await getDb()
     .update(entries)
     .set(parsed.data)
-    .where(eq(entries.id, c.req.param("id")))
+    .where(and(eq(entries.id, c.req.param("id")), eq(entries.userId, c.get("userId"))))
     .returning();
   const row = updated[0];
   if (!row) return c.json({ error: "条目不存在" }, 404);
@@ -194,7 +178,7 @@ entriesRouter.patch("/:id", async (c) => {
 entriesRouter.delete("/:id", async (c) => {
   const deleted = await getDb()
     .delete(entries)
-    .where(eq(entries.id, c.req.param("id")))
+    .where(and(eq(entries.id, c.req.param("id")), eq(entries.userId, c.get("userId"))))
     .returning();
   if (!deleted[0]) return c.json({ error: "条目不存在" }, 404);
   return c.json({ ok: true });

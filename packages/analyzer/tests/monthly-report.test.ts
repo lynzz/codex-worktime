@@ -6,8 +6,8 @@ import { promisify } from "node:util";
 import { expect, it } from "vitest";
 
 import { runCli } from "../src/index.js";
-import { generateMonthlyReport } from "../src/reporting/generate-monthly-report.js";
-import { reportSnapshotSchema } from "@codex-worktime/report-core";
+import { collectMonthlyReport, generateMonthlyReport } from "../src/reporting/generate-monthly-report.js";
+import { calculateReportDigest, estimatedCostCents, renderReportSnapshot, reportBusinessJson, reportSnapshotSchema } from "@codex-worktime/report-core";
 import { generateProjectReport } from "../src/reporting/generate-project-report.js";
 
 const exec = promisify(execFile);
@@ -50,7 +50,7 @@ it("exports the registered Shanghai month as same-origin HTML and precise, priva
   });
   const json = await readFile(jsonPath, "utf8");
   const snapshot = JSON.parse(json);
-  expect(snapshot).toMatchObject({ schemaVersion: 1, project: { profileId: "demo", displayName: "测试项目" },
+  expect(snapshot).toMatchObject({ schemaVersion: 2, project: { profileId: "demo", displayName: "测试项目" },
     period: { month: "2026-08", from: "2026-08-01", to: "2026-08-31", timeZone: "Asia/Shanghai" },
     totals: { activeMs: 1234, runMs: 123, commitEstimateMs: 30000, estimatedCostCents: 125 },
     rate: { currency: "CNY", dayRateCents: 120000, hoursPerDay: 8 }
@@ -75,6 +75,8 @@ it("redacts private text even when it reappears inside commit messages or groupi
   await gitFixture(root);
   await commit(root, "feat(report): <script>private-session PRIVATE_API_KEY</script>", "2026-08-01T09:00:00+08:00");
   await commit(root, "fix(/opt/private/repo): token=RAW_TOKEN", "2026-08-01T10:00:00+08:00");
+  await commit(root, 'fix(report): {"password":"QUOTED_PASSWORD"}', "2026-08-01T10:01:00+08:00");
+  await commit(root, "fix(report): {'api-key':'QUOTED_API_KEY'}", "2026-08-01T10:02:00+08:00");
   const jsonPath = join(directory, "snapshot.json");
   const htmlPath = join(directory, "report.html");
   await generateProjectReport({ profile: { id: "demo", displayName: "隐私测试", roots: [{ id: "root", path: root }] },
@@ -84,7 +86,7 @@ it("redacts private text even when it reappears inside commit messages or groupi
     applicationDataDirectory: directory, htmlPath, jsonPath });
   const json = await readFile(jsonPath, "utf8");
   const html = await readFile(htmlPath, "utf8");
-  for (const secret of [root, "private-session", "PRIVATE_API_KEY", "PRIVATE_TOOL_OUTPUT", "/opt/private/repo", "RAW_TOKEN"]) expect(json + html).not.toContain(secret);
+  for (const secret of [root, "private-session", "PRIVATE_API_KEY", "PRIVATE_TOOL_OUTPUT", "/opt/private/repo", "RAW_TOKEN", "QUOTED_PASSWORD", "QUOTED_API_KEY"]) expect(json + html).not.toContain(secret);
   expect(html).toContain("&lt;script&gt;");
   expect(JSON.parse(json).days[0].commitGroups.some((group: { label: string }) => group.label.includes("已脱敏"))).toBe(true);
 });
@@ -169,7 +171,7 @@ it("keeps empty/incomplete inputs unknown and rejects malformed or non-whitelist
   for (const change of [
     { period: { ...snapshot.period, from: "2026-07-31" } }, { days: snapshot.days.slice(1) },
     { totals: { ...snapshot.totals, activeMs: 0.1 } }, { totals: { ...snapshot.totals, estimatedCostCents: 200 } },
-    { schemaVersion: 2 }
+    { schemaVersion: 1 }
   ]) expect(reportSnapshotSchema.safeParse({ ...snapshot, ...change }).success).toBe(false);
   await expect(generateMonthlyReport({ profileId: "../private", month: "2026-08", dataDirectory: directory, htmlPath: "unused", jsonPath: "unused" })).rejects.toThrow();
   await expect(generateMonthlyReport({ profileId: "demo", month: "2026-13", dataDirectory: directory, htmlPath: "unused", jsonPath: "unused" })).rejects.toThrow();
@@ -184,4 +186,110 @@ it("reports unknown coverage through the public result when no sources establish
   const snapshot = JSON.parse(await readFile(join(directory, "snapshot.json"), "utf8"));
   expect(snapshot.days).toHaveLength(28);
   expect(snapshot.days.every((day: { coverage: string }) => day.coverage === "unknown")).toBe(true);
+});
+
+it.each([["2026-02", 28], ["2024-02", 29], ["2026-04", 30], ["2026-08", 31]] as const)("collects the full %s calendar without output artifacts", async (month, count) => {
+  const directory = await mkdtemp(join(tmpdir(), "monthly-collect-"));
+  await mkdir(join(directory, "profiles"));
+  await writeFile(join(directory, "profiles", "demo.json"), JSON.stringify({
+    id: "demo", displayName: "日历报告", roots: [{ id: "root", path: join(directory, "missing") }]
+  }));
+  const snapshot = await collectMonthlyReport({ profileId: "demo", month, dataDirectory: directory, historyHome: join(directory, "no-history") });
+  expect(snapshot.days).toHaveLength(count);
+  expect(snapshot.days[0].date).toBe(`${month}-01`);
+  expect(snapshot.days.at(-1)?.date).toBe(`${month}-${count}`);
+  expect(snapshot.weekly.every((week) => week.activeMs === null && week.runMs === null)).toBe(true);
+  expect(snapshot.totals.activeMs).toBeNull();
+  expect(snapshot.inputDigest).toBe(await calculateReportDigest(snapshot));
+  await expect(readFile(join(directory, "report.html"))).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("restores actual Hook ingestion from SQLite through the output-free monthly collector", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "monthly-hook-"));
+  await mkdir(join(directory, "profiles"));
+  const profilePath = join(directory, "profiles", "demo.json");
+  const root = join(directory, "workspace");
+  await writeFile(profilePath, JSON.stringify({ id: "demo", displayName: "Hook 报告", roots: [{ id: "root", path: root }] }));
+  const oldDataDirectory = process.env.CODEX_WORKTIME_DATA_DIR;
+  process.env.CODEX_WORKTIME_DATA_DIR = directory;
+  try {
+    for (const [type, occurredAt] of [["UserPromptSubmit", "2026-08-01T01:00:00Z"], ["Stop", "2026-08-01T01:00:01.234Z"]]) {
+      await runCli(["node", "cli", "hook", "--profile", profilePath, "--database", join(directory, "demo.sqlite"),
+        "--output", join(directory, "hook.html"), "--occurred-at", occurredAt, "--quiet"], {
+        stdin: JSON.stringify({ hook_event_name: type, session_id: "PRIVATE_HOOK_SESSION", turn_id: "PRIVATE_HOOK_TURN", cwd: root, prompt: "PRIVATE_HOOK_BODY" })
+      });
+    }
+  } finally {
+    if (oldDataDirectory === undefined) delete process.env.CODEX_WORKTIME_DATA_DIR;
+    else process.env.CODEX_WORKTIME_DATA_DIR = oldDataDirectory;
+  }
+  const snapshot = await collectMonthlyReport({ profileId: "demo", month: "2026-08", dataDirectory: directory, historyHome: join(directory, "no-history") });
+  expect(snapshot.sources).toContainEqual({ source: "hook", eventCount: 2, status: "available" });
+  expect(snapshot.totals.activeMs).toBe(1234);
+  expect(snapshot.days[0].activeMs).toBe(1234);
+  expect(snapshot.weekly[0].activeMs).toBe(1234);
+  for (const secret of [root, "PRIVATE_HOOK_SESSION", "PRIVATE_HOOK_TURN", "PRIVATE_HOOK_BODY"]) expect(JSON.stringify(snapshot)).not.toContain(secret);
+});
+
+it("saves real attribution evidence and only month-linked Feature durations, with stable business identity", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "monthly-feature-"));
+  const jsonPath = join(directory, "snapshot.json");
+  const htmlPath = join(directory, "report.html");
+  await generateProjectReport({
+    profile: { id: "demo", displayName: "归因报告", roots: [{ id: "root", path: join(directory, "missing") }] },
+    events: [], month: "2026-08", databasePath: join(directory, "demo.sqlite"), applicationDataDirectory: directory, htmlPath, jsonPath,
+    featureAttributions: [
+      { featureId: "calendar", featureName: "月历 <b>显示</b>", commitId: "PRIVATE_ATTRIBUTION_COMMIT", evidence: "explicit-ticket", confidence: "high", suggested: false },
+      { featureId: "draft", featureName: "候选功能", commitId: "PRIVATE_OTHER_COMMIT", evidence: "semantic", confidence: "low", suggested: true }
+    ],
+    featureIntervalTotals: [
+      { featureId: "calendar", activeMinutes: 0.02056666666666667, runMinutes: 0.00205, evidenceCount: 1, dateRange: { from: "2026-08-01", to: "2026-08-31" } },
+      { featureId: "draft", activeMinutes: 20, runMinutes: 10, evidenceCount: 1, dateRange: { from: "2026-07-01", to: "2026-07-31" } }
+    ]
+  });
+  const snapshot = reportSnapshotSchema.parse(JSON.parse(await readFile(jsonPath, "utf8")));
+  expect(snapshot.featureAttributions[0]).toMatchObject({ featureId: "calendar", evidence: "explicit-ticket", confidence: "high", suggested: false });
+  expect(snapshot.featureIntervalTotals).toEqual([{ featureId: "calendar", activeMs: 1234, runMs: 123, evidenceCount: 1 }]);
+  const html = renderReportSnapshot(snapshot);
+  expect(html).toBe(await readFile(htmlPath, "utf8"));
+  expect(html).toContain("月历 &lt;b&gt;显示&lt;/b&gt;");
+  expect(html).toContain("明确票据");
+  expect(html).toContain("建议，非确认归因");
+  for (const secret of ["PRIVATE_ATTRIBUTION_COMMIT", "PRIVATE_OTHER_COMMIT"]) expect(JSON.stringify(snapshot) + html).not.toContain(secret);
+  const reordered = Object.fromEntries(Object.entries(snapshot).reverse()) as typeof snapshot;
+  reordered.generatedAt = "2026-10-03T00:00:00Z";
+  reordered.inputDigest = "f".repeat(64);
+  expect(reportBusinessJson(reordered)).toBe(reportBusinessJson(snapshot));
+  expect(await calculateReportDigest(reordered)).toBe(snapshot.inputDigest);
+  expect(estimatedCostCents(30000)).toBe(125);
+  expect(reportSnapshotSchema.safeParse({ ...snapshot, featureAttributions: [{ ...snapshot.featureAttributions[0], commitId: "PRIVATE_ID" }] }).success).toBe(false);
+  expect(reportSnapshotSchema.safeParse({ ...snapshot, weekly: [{ ...snapshot.weekly[0], activeMs: 1 }, ...snapshot.weekly.slice(1)] }).success).toBe(false);
+});
+
+it("exports all escaped commit titles with expandable overflow and the saved exact pricing", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "monthly-messages-"));
+  const root = join(directory, "root");
+  await gitFixture(root);
+  for (const [index, title] of ["feat(report): <script>text</script>", "feat(report): <script>text</script>", "fix(report): 第二条", "fix(report): 第三条", "fix(report): 第四条"].entries()) {
+    await commit(root, title, `2026-08-01T09:00:${String(index * 10).padStart(2, "0")}+08:00`);
+  }
+  await mkdir(join(directory, "profiles"));
+  await writeFile(join(directory, "profiles", "demo.json"), JSON.stringify({
+    id: "demo", displayName: "展开报告", roots: [{ id: "root", path: root }, { id: "duplicate", path: root }]
+  }));
+  const snapshot = await collectMonthlyReport({ profileId: "demo", month: "2026-08", dataDirectory: directory, historyHome: join(directory, "no-history") });
+  expect(snapshot.days[0].commitCount).toBe(5);
+  expect(snapshot.days[0].commitMessages).toContainEqual({ title: "feat(report): <script>text</script>", count: 2 });
+  expect(snapshot.days[0].commitEstimateMs).toBe(40000);
+  const saved = { ...snapshot, rate: { ...snapshot.rate, dayRateCents: 240000 },
+    totals: { ...snapshot.totals, estimatedCostCents: estimatedCostCents(40000, 240000) } };
+  saved.inputDigest = await calculateReportDigest(saved);
+  const html = renderReportSnapshot(saved);
+  expect(html).toContain("&lt;script&gt;text&lt;/script&gt; × 2");
+  expect(html).not.toContain("<script>");
+  expect(html).toContain("<details><summary>展开其余 1 条提交信息</summary>");
+  expect(html).toContain("第四条");
+  expect(html).toContain("¥3.33");
+  expect(html).toContain("¥2,400.00 / 人天");
+  expect(await calculateReportDigest(saved)).not.toBe(snapshot.inputDigest);
 });

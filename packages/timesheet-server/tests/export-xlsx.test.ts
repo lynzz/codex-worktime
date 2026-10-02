@@ -1,9 +1,9 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
+
 import ExcelJS from "exceljs";
-import { api } from "../src/api";
+import { testApi as api, resetTestData, TEST_USER_ID } from "./setup";
 import { getDb } from "../src/db";
-import { entries, projects } from "../src/schema";
+import { projects } from "../src/schema";
 import { aggregateTaskRows, buildTaskListWorkbook } from "../src/export-xlsx";
 
 const hasTestDb = Boolean(process.env.NEON_TEST_DATABASE_URL);
@@ -48,8 +48,8 @@ describe.skipIf(!hasTestDb)("GET /api/export/xlsx(模板导出,集成)", () => {
 
   beforeEach(async () => {
     const db = getDb();
-    await db.execute(sql`truncate table entries, tasks, projects cascade`);
-    await db.insert(projects).values({ id: "p1", name: "EQA", archived: false });
+    await resetTestData();
+    await db.insert(projects).values({ id: "p1", userId: TEST_USER_ID, name: "EQA", archived: false });
     await post("/api/entries", { date: "2026-09-04", projectId: "p1", title: "生成证书联调", minutes: 180, note: "含联调环境" });
     await post("/api/entries", { date: "2026-09-05", projectId: "p1", title: "生成证书联调", minutes: 120 });
     await post("/api/entries", { date: "2026-09-05", projectId: "p1", title: "微生物字典 UI 调试", minutes: 90, category: "开发" });

@@ -1,5 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { CalendarRange, Database, FolderKanban, MessageSquareText } from "lucide-react";
+import { CalendarRange, Database, FileChartColumn, FolderKanban, LogOut, MessageSquareText } from "lucide-react";
+import { useState } from "react";
 import {
   addDays,
   dayOfWeekCN,
@@ -18,16 +19,42 @@ const NAV = [
   { to: "/home", title: "今天", icon: MessageSquareText },
   { to: "/month", title: "月历", icon: CalendarRange },
   { to: "/projects", title: "项目", icon: FolderKanban },
+  { to: "/reports", title: "报告", icon: FileChartColumn },
   { to: "/data", title: "数据", icon: Database },
 ];
 
 // 布局:64px 图标轨 + 288px 洞察栏(lg 起)+ 内容区;home 底部输入坞按同一偏移定位
 export function AppShell({ title, children }: { title: string; children: React.ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
   // 带外壳的页面 loader 均返回 TimesheetData 形状(home 自载同形数据),外壳直接读叶子路由数据
   const data = useRouterState({
     select: (s) => s.matches[s.matches.length - 1]?.loaderData as TimesheetData | undefined,
   });
+
+  async function logout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setLogoutError("");
+    try {
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      if (!response.ok && response.status !== 401) {
+        const body = await response.json().catch(() => ({})) as { error?: string };
+        throw new Error(body.error ?? "退出登录失败,请重试");
+      }
+      // cookie 已由服务器清除;整页导航丢弃所有已缓存的账号数据。
+      location.replace("/login");
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : "退出登录失败,请重试");
+      setLoggingOut(false);
+    }
+  }
+
+  // 从退出开始就卸载账号页面,避免请求完成后仍显示旧数据。
+  if (loggingOut) {
+    return <div role="status" className="flex min-h-screen items-center justify-center bg-white text-sm text-zinc-500">正在退出登录…</div>;
+  }
 
   return (
     <div className="min-h-screen bg-white text-zinc-900">
@@ -53,6 +80,34 @@ export function AppShell({ title, children }: { title: string; children: React.R
             </Link>
           );
         })}
+        {data && (
+          <div className="relative mt-auto flex w-full flex-col items-center gap-2 pt-4">
+            <div
+              title={data.user.username}
+              aria-label={`当前账号: ${data.user.username}`}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-200/15 text-sm font-semibold text-brand-50"
+            >
+              {data.user.username.slice(0, 1).toUpperCase()}
+            </div>
+            <span className="w-14 truncate text-center text-[10px] text-brand-100" title={data.user.username}>
+              {data.user.username}
+            </span>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="flex w-12 flex-col items-center gap-1 rounded-xl py-2 text-[10px] text-brand-200/60 transition-colors hover:bg-white/5 hover:text-brand-50"
+              aria-label={`退出登录 (${data.user.username})`}
+            >
+              <LogOut className="h-[18px] w-[18px]" />
+              退出
+            </button>
+            {logoutError && (
+              <p role="alert" className="absolute bottom-0 left-full ml-2 w-56 rounded-lg border border-red-200 bg-white p-3 text-xs text-red-600 shadow-sm">
+                {logoutError}
+              </p>
+            )}
+          </div>
+        )}
       </nav>
 
       {data && <InsightPanel data={data} />}

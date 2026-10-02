@@ -19,6 +19,7 @@ const EXPECTED_HEADERS = ["项目", "任务", "评估工时(人时)"] as const;
 export async function importTaskListWorkbook(
   data: ArrayBuffer | Uint8Array | Buffer,
   targetDate: string,
+  userId: string,
 ): Promise<TaskListImportResult> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(data as unknown as ArrayBuffer);
@@ -90,13 +91,13 @@ export async function importTaskListWorkbook(
     entries: { inserted: 0, skipped: 0 },
   };
 
-  const allProjects = await db.select().from(projects);
+  const allProjects = await db.select().from(projects).where(eq(projects.userId, userId));
   for (const row of rows) {
     let project = allProjects.find((p) => p.name === row.projectName);
     if (!project) {
       const inserted = await db
         .insert(projects)
-        .values({ id: crypto.randomUUID(), name: row.projectName, archived: false })
+        .values({ id: crypto.randomUUID(), userId, name: row.projectName, archived: false })
         .returning();
       project = inserted[0]!;
       allProjects.push(project);
@@ -109,12 +110,12 @@ export async function importTaskListWorkbook(
       await db
         .select()
         .from(tasks)
-        .where(and(eq(tasks.projectId, project.id), eq(tasks.title, row.title)))
+        .where(and(eq(tasks.userId, userId), eq(tasks.projectId, project.id), eq(tasks.title, row.title)))
     )[0];
     if (!task) {
       const inserted = await db
         .insert(tasks)
-        .values({ id: crypto.randomUUID(), projectId: project.id, title: row.title })
+        .values({ id: crypto.randomUUID(), userId, projectId: project.id, title: row.title })
         .returning();
       task = inserted[0]!;
       result.tasks.created++;
@@ -128,6 +129,7 @@ export async function importTaskListWorkbook(
         .from(entries)
         .where(
           and(
+            eq(entries.userId, userId),
             eq(entries.date, row.date),
             eq(entries.projectId, project.id),
             eq(entries.title, row.title),
@@ -142,6 +144,7 @@ export async function importTaskListWorkbook(
 
     await db.insert(entries).values({
       id: crypto.randomUUID(),
+      userId,
       date: row.date,
       projectId: project.id,
       title: row.title,

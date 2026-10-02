@@ -29,6 +29,7 @@ const TITLES: Record<string, string> = {
   "/home": "今天",
   "/month": "月历",
   "/projects": "项目与任务行",
+  "/reports": "月度报告",
   "/data": "导入导出",
 };
 

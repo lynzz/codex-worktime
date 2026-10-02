@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./report-collector": "./src/manual/report-collector.ts",
+    "./reporting": "./src/reporting/generate-monthly-report.ts"
+  },
   "bin": {
     "codex-worktime": "dist/index.js"
   },
@@ -19,6 +23,7 @@
     "better-sqlite3": "^12.8.0",
     "commander": "^14.0.2",
     "nunjucks": "^3.2.4",
+    "drizzle-orm": "^0.45.2",
     "zod": "^4.1.12"
   },
   "devDependencies": {

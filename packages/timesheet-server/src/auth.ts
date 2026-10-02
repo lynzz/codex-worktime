@@ -1,92 +1,103 @@
-import { getCookie } from "hono/cookie";
+import { eq } from "drizzle-orm";
+import type { Context, MiddlewareHandler } from "hono";
+import { getCookie, setCookie, deleteCookie } from "hono/cookie";
+import { findUserByUsername, isValidPassword, isValidUsername, verifyPassword } from "./accounts.js";
+import { getDb } from "./db.js";
+import { users } from "./schema.js";
 
-// 单用户登录:ACCESS_PASSWORD(secret)→ HMAC 签名 cookie(Web Crypto,Workers 兼容)
+export type AppEnv = { Variables: { userId: string } };
+
 const COOKIE = "gongshi_auth";
-const SESSION_TTL_MS = 30 * 24 * 3600 * 1000; // 30 天
-
+const SESSION_TTL_MS = 30 * 24 * 3600 * 1000;
 const encoder = new TextEncoder();
+// A valid encoding ensures nonexistent users incur the same PBKDF2 work as a bad password.
+const FAKE_HASH = "pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
-async function hmac(payload: string, secret: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+function isValidUserId(userId: string): boolean {
+  return userId.length > 0 && userId.length <= 128 && !/[^A-Za-z0-9_-]/.test(userId);
 }
 
-async function signSession(expiresAt: number, secret: string): Promise<string> {
-  return `${expiresAt}.${await hmac(String(expiresAt), secret)}`;
+
+async function signSession(userId: string, expiresAt: number, secret: string): Promise<string> {
+  if (!isValidUserId(userId)) throw new Error("用户 ID 格式无效");
+  const payload = `${userId}.${expiresAt}`;
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
+  const hex = Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${payload}.${hex}`;
 }
 
-async function verifySession(cookie: string | undefined, secret: string): Promise<boolean> {
-  if (!cookie) return false;
-  const [expRaw, sig] = cookie.split(".");
-  if (!expRaw || !sig) return false;
-  const exp = Number(expRaw);
-  if (!Number.isFinite(exp) || exp < Date.now()) return false;
-  const expected = await hmac(expRaw, secret);
-  if (expected.length !== sig.length) return false;
-  // 常数时间比较
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) {
-    diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
-  }
-  return diff === 0;
+async function verifySession(cookie: string | undefined, secret: string): Promise<string | undefined> {
+  if (!cookie) return undefined;
+  const parts = cookie.split(".");
+  if (parts.length !== 3) return undefined;
+  const [userId, expiry, signature] = parts as [string, string, string];
+  if (!isValidUserId(userId) || !/^[1-9][0-9]{0,15}$/.test(expiry) ||
+    signature.length !== 64 || !/^[a-f0-9]{64}$/.test(signature)) return undefined;
+  const expiresAt = Number(expiry);
+  const now = Date.now();
+  if (!Number.isSafeInteger(expiresAt) || String(expiresAt) !== expiry ||
+    expiresAt <= now || expiresAt > now + SESSION_TTL_MS) return undefined;
+  const bytes = Uint8Array.from(signature.match(/../g)!, (hex) => Number.parseInt(hex, 16));
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+  const valid = await crypto.subtle.verify("HMAC", key, bytes, encoder.encode(`${userId}.${expiry}`));
+  return valid ? userId : undefined;
 }
 
-function unauthorized(c: { header: (k: string, v: string) => void; body: (b: string, s: 401) => Response }) {
-  c.header("WWW-Authenticate", 'Basic realm="gongshi"');
-  return c.body("Unauthorized", 401);
+function unavailable(c: Context<AppEnv>) {
+  return c.json({ error: "SESSION_SECRET 未配置" }, 503);
 }
 
-// 挂在 Hono 应用最外层:未登录的 API 请求一律 401
-export function authMiddleware() {
-  const secret = process.env.ACCESS_PASSWORD ?? "";
-  return async (c: any, next: () => Promise<void>) => {
-    // 未配置口令 = 不启用登录(本地开发)
-    if (!secret) return next();
-    const cookie = getCookie(c as never, COOKIE);
-    if (await verifySession(cookie, secret)) return next();
-    return unauthorized(c);
+export async function checkAuth(c: Context<AppEnv>): Promise<boolean> {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) return false;
+  const userId = await verifySession(getCookie(c, COOKIE), secret);
+  if (!userId) return false;
+  const [user] = await getDb().select({ id: users.id }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) return false;
+  c.set("userId", user.id);
+  return true;
+}
+
+export function authMiddleware(): MiddlewareHandler<AppEnv> {
+  return async (c, next) => {
+    if (!process.env.SESSION_SECRET) return unavailable(c);
+    if (!(await checkAuth(c))) return c.body("Unauthorized", 401);
+    await next();
   };
 }
 
-// 登录:校验口令,签发 30 天 cookie
-export async function loginHandler(c: any) {
-  const secret = process.env.ACCESS_PASSWORD ?? "";
-  if (!secret) return c.json({ ok: true, enabled: false }, 200);
-  const { password } = (await c.req.json().catch(() => ({}))) as { password?: string };
-  if (!password || password !== secret) {
-    return c.json({ error: "口令不正确" }, 401);
+export async function loginHandler(c: Context<AppEnv>) {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) return unavailable(c);
+  const body: unknown = await c.req.json().catch(() => null);
+  const credentials = body && typeof body === "object" && !Array.isArray(body)
+    ? body as Record<string, unknown> : {};
+  const username = credentials.username;
+  const password = credentials.password;
+  const user = isValidUsername(username) ? await findUserByUsername(username) : undefined;
+  const validPassword = isValidPassword(password);
+  const verified = await verifyPassword(validPassword ? password : "invalid-credentials", user?.passwordHash ?? FAKE_HASH);
+  if (!user || !validPassword || !verified || !isValidUserId(user.id)) {
+    return c.json({ error: "用户名或口令不正确" }, 401);
   }
   const expiresAt = Date.now() + SESSION_TTL_MS;
-  const token = await signSession(expiresAt, secret);
-  setAuthCookie(c, token);
+  setCookie(c, COOKIE, await signSession(user.id, expiresAt, secret), {
+    path: "/", httpOnly: true, sameSite: "Lax", maxAge: SESSION_TTL_MS / 1000,
+    secure: process.env.NODE_ENV === "production",
+  });
   return c.json({ ok: true, expiresAt });
 }
 
-export function setAuthCookie(c: any, token: string) {
-  c.header(
-    "set-cookie",
-    `${COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_MS / 1000}${
-      process.env.NODE_ENV === "production" ? "; Secure" : ""
-    }`,
-  );
+export async function meHandler(c: Context<AppEnv>) {
+  const [user] = await getDb().select({ username: users.username }).from(users).where(eq(users.id, c.get("userId"))).limit(1);
+  if (!user) return c.body("Unauthorized", 401);
+  return c.json(user);
 }
 
-export function logoutHandler(c: any) {
-  c.header("set-cookie", `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`);
+export function logoutHandler(c: Context<AppEnv>) {
+  deleteCookie(c, COOKIE, {
+    path: "/", httpOnly: true, sameSite: "Lax", secure: process.env.NODE_ENV === "production",
+  });
   return c.json({ ok: true });
-}
-
-export async function checkAuth(c: any): Promise<boolean> {
-  const secret = process.env.ACCESS_PASSWORD ?? "";
-  if (!secret) return true;
-  return verifySession(getCookie(c as never, COOKIE), secret);
 }

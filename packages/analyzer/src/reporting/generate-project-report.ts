@@ -7,10 +7,9 @@ import { Temporal } from "@js-temporal/polyfill";
 import Database from "better-sqlite3";
 import nunjucks from "nunjucks";
 import { z } from "zod";
-import { monthPeriod } from "@codex-worktime/report-core";
+import { monthPeriod, renderReportSnapshot, type ReportSnapshot } from "@codex-worktime/report-core";
 import { buildReportSnapshot, privateStrings, type CursorUndated } from "./build-report-snapshot.js";
 import { reportTemplate } from "./report-template.js";
-import { renderReportSnapshot } from "./render-report-snapshot.js";
 
 import { calculateIntervals, type IntervalCalculation, type ReportingDateRange } from "../accounting/calculate-intervals.js";
 import { readProjectCommitReportData } from "../attribution/read-project-commit-estimates.js";
@@ -106,7 +105,7 @@ const inputSchema = z.object({
   view: z.enum(["internal", "customer"]).default("internal"),
   dateRange: dateRangeSchema.optional(),
   databasePath: z.string().min(1),
-  htmlPath: z.string().min(1)
+  htmlPath: z.string().min(1).optional()
 });
 
 export type GenerateProjectReportInput = {
@@ -674,11 +673,11 @@ async function writeOfflineReport(htmlPath: string, contents: string): Promise<v
   await rename(temporaryPath, htmlPath);
 }
 
-export async function generateProjectReport(input: GenerateProjectReportInput): Promise<ProjectReportResult> {
+async function refreshProjectReport(input: Omit<GenerateProjectReportInput, "htmlPath"> & { htmlPath?: string }): Promise<Omit<ProjectReportResult, "htmlPath"> & { htmlPath?: string; snapshot?: ReportSnapshot }> {
   const period = input.month ? monthPeriod(input.month) : undefined;
   if (input.jsonPath && !period) throw new Error("JSON snapshots require a full report month");
   if (period && input.dateRange && (input.dateRange.from !== period.from || input.dateRange.to !== period.to)) throw new Error("Month and date range disagree");
-  if (input.jsonPath && resolve(input.jsonPath) === resolve(input.htmlPath)) throw new Error("HTML and JSON output paths must differ");
+  if (input.jsonPath && input.htmlPath && resolve(input.jsonPath) === resolve(input.htmlPath)) throw new Error("HTML and JSON output paths must differ");
   const { profile, events, coverage, featureAttributions, featureIntervalTotals, sourceNotes, view, dateRange, databasePath, htmlPath } = inputSchema.parse({ ...input, dateRange: period ? { from: period.from, to: period.to } : input.dateRange });
   if (view === "customer" && !dateRange) {
     throw new Error("Customer reports require an Asia/Shanghai reporting date range");
@@ -748,13 +747,16 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
         : coverageForRange.some((entry) => entry.status === "unknown")
           ? "unknown"
           : "no-data";
-      const snapshot = period ? buildReportSnapshot({ profile, month: period.month,
+      const snapshot = period ? await buildReportSnapshot({ profile, month: period.month,
         generatedAt: input.generatedAt ?? new Date().toISOString(), accounting, coverage: resolvedCoverage,
         commits: commitReportData, sourceCounts, warnings: [...persistedInvalidTimestampWarnings, ...sequenceWarnings],
-        secrets: privateStrings(input.events), cursorUndated: input.cursorUndated, sourceStatus: input.sourceStatus,
+        secrets: [...privateStrings(input.events), ...featureAttributions.map((attribution) => attribution.commitId),
+          ...storedEvents.flatMap((event) => [event.eventHash, event.sessionHash, event.turnHash, event.toolUseHash, event.agentHash, event.lineageHash]
+            .filter((value): value is string => value !== null))],
+        cursorUndated: input.cursorUndated, sourceStatus: input.sourceStatus, featureAttributions, featureIntervalTotals,
         observedDates: storedEvents.map((event) => Temporal.Instant.from(event.occurredAt).toZonedDateTimeISO("Asia/Shanghai").toPlainDate().toString())
       }) : undefined;
-      const renderedReport = snapshot ? renderReportSnapshot(snapshot, view) : renderReport(
+      const renderedReport = !htmlPath ? undefined : snapshot ? renderReportSnapshot(snapshot, view) : renderReport(
         profile.displayName,
         matchedEventCount,
         [...persistedInvalidTimestampWarnings, ...sequenceWarnings],
@@ -773,11 +775,11 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
       );
       database.exec("COMMIT");
       transactionStarted = false;
-      await writeOfflineReport(htmlPath, renderedReport);
+      if (htmlPath && renderedReport !== undefined) await writeOfflineReport(htmlPath, renderedReport);
       if (snapshot && input.jsonPath) await writeOfflineReport(input.jsonPath, `${JSON.stringify(snapshot, null, 2)}\n`);
       const snapshotCoverage = snapshot?.days.some((day) => day.coverage === "available") ? "available"
         : snapshot?.days.some((day) => day.coverage === "unknown") ? "unknown" : "no-data";
-      return { matchedEventCount, coverage: snapshot ? snapshotCoverage : coverageStatus, htmlPath };
+      return { matchedEventCount, coverage: snapshot ? snapshotCoverage : coverageStatus, htmlPath, snapshot };
     } catch (error: unknown) {
       if (transactionStarted) {
         database?.exec("ROLLBACK");
@@ -787,4 +789,16 @@ export async function generateProjectReport(input: GenerateProjectReportInput): 
       database?.close();
     }
   });
+}
+
+export async function generateProjectReport(input: GenerateProjectReportInput): Promise<ProjectReportResult> {
+  const result = await refreshProjectReport(input);
+  return { matchedEventCount: result.matchedEventCount, coverage: result.coverage, htmlPath: input.htmlPath };
+}
+
+/** Same SQLite ingestion/accounting seam as offline generation, without output artifacts. */
+export async function collectProjectReportSnapshot(input: Omit<GenerateProjectReportInput, "htmlPath" | "jsonPath"> & { month: string }): Promise<ReportSnapshot> {
+  const result = await refreshProjectReport(input);
+  if (!result.snapshot) throw new Error("Monthly snapshot was not produced");
+  return result.snapshot;
 }

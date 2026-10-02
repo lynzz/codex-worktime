@@ -23,6 +23,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "~": path.resolve(dirname, "src"),
+      "#report-runtime": path.resolve(dirname, `src/lib/report-runtime.${nitroPreset ? "cloudflare" : "node"}.ts`),
     },
   },
 });

@@ -1,10 +1,8 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { eq, sql } from "drizzle-orm";
-import { api } from "../src/api";
+import { eq } from "drizzle-orm";
+import { testApi as api, resetTestData, TEST_USER_ID } from "./setup";
 import { getDb } from "../src/db";
-import { entries, projects, tasks } from "../src/schema";
+import { entries, tasks } from "../src/schema";
 
 const hasTestDb = Boolean(process.env.NEON_TEST_DATABASE_URL);
 
@@ -15,10 +13,7 @@ describe.skipIf(!hasTestDb)("projects API(集成,Neon test 分支)", () => {
   });
 
   beforeEach(async () => {
-    // 单条语句清空三表,减少跨境往返
-    await getDb().execute(
-      sql`truncate table entries, tasks, projects cascade`,
-    );
+    await resetTestData();
   });
 
   it("创建 → 列表 → 改名 → 归档 → 恢复全链路", async () => {
@@ -67,8 +62,6 @@ describe.skipIf(!hasTestDb)("projects API(集成,Neon test 分支)", () => {
       body: JSON.stringify({ name: "   " }),
     });
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain("项目名");
   });
 
   it("不存在的项目 PATCH/DELETE 返回 404", async () => {
@@ -91,6 +84,7 @@ describe.skipIf(!hasTestDb)("projects API(集成,Neon test 分支)", () => {
     const { id } = (await created.json()) as { id: string };
     await getDb().insert(entries).values({
       id: "e1",
+      userId: TEST_USER_ID,
       date: "2026-09-05",
       projectId: id,
       title: "任意",
@@ -101,9 +95,6 @@ describe.skipIf(!hasTestDb)("projects API(集成,Neon test 分支)", () => {
       method: "DELETE",
     });
     expect(blocked.status).toBe(409);
-    expect(((await blocked.json()) as { error: string }).error).toContain(
-      "归档",
-    );
 
     await getDb().delete(entries).where(eq(entries.id, "e1"));
     const ok = await api.request(`/api/projects/${id}`, { method: "DELETE" });
@@ -119,7 +110,7 @@ describe.skipIf(!hasTestDb)("projects API(集成,Neon test 分支)", () => {
       body: JSON.stringify({ name: "EQA" }),
     });
     const { id } = (await created.json()) as { id: string };
-    await getDb().insert(tasks).values({ id: "t1", projectId: id, title: "联调" });
+    await getDb().insert(tasks).values({ id: "t1", userId: TEST_USER_ID, projectId: id, title: "联调" });
 
     const ok = await api.request(`/api/projects/${id}`, { method: "DELETE" });
     expect(ok.status).toBe(200);

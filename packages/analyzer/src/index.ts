@@ -7,6 +7,9 @@ import { sanitizeHookEvent } from "./hooks/sanitize-hook-event.js";
 import { backupLocalData, deleteLocalData } from "./lifecycle/manage-local-data.js";
 import { generateProjectReport } from "./reporting/generate-project-report.js";
 import { generateMonthlyReport } from "./reporting/generate-monthly-report.js";
+import { addUser, resetUserPassword, listUsers, findUserByUsername, claimOrphans, importPrototypeTimesheet } from "@codex-worktime/timesheet-server";
+import { readManualPassword } from "./manual/password.js";
+import { migrateManualAccounts } from "./manual/migrate.js";
 
 type ReportCommandOptions = {
   profile: string;
@@ -143,14 +146,43 @@ export async function runCli(argv: string[], runtime: CliRuntime = {}): Promise<
     });
 
   const manual = program.command("manual").description("Manual human-declared timesheet (ADR-0003).");
+  manual.command("migrate")
+    .description("Apply staged manual-account and report migrations without deleting existing data.")
+    .requiredOption("--phase <nullable|owned|reports>", "nullable before claiming; owned after claiming; reports afterward")
+    .option("--adopt-existing-created-at", "record migration 0002 only after checking the already-existing column")
+    .action(async (options: { phase: string; adoptExistingCreatedAt?: boolean }) => {
+      stdout.write(`${JSON.stringify(await migrateManualAccounts(options.phase, options))}\n`);
+    });
   manual
     .command("import")
-    .description("Idempotently import a prototype timesheet JSON into the Neon manual store.")
-    .argument("<file>", "prototype timesheet JSON file")
-    .action(async (file: string) => {
-      const { importPrototypeTimesheet } = await import("./manual/import-prototype.js");
-      const result = await importPrototypeTimesheet(await readJson(file));
+    .description("Idempotently import a timesheet JSON into the named user's Neon manual store.")
+    .argument("<file>", "prototype or exported timesheet JSON file")
+    .requiredOption("--user <username>", "existing owner account")
+    .action(async (file: string, options: { user: string }) => {
+      const user = await findUserByUsername(options.user);
+      if (!user) throw new Error("用户不存在");
+      const result = await importPrototypeTimesheet(await readJson(file), user.id);
       stdout.write(`${JSON.stringify(result)}\n`);
+    });
+
+  const users = manual.command("user").description("Administer private manual timesheet accounts.");
+  users.command("add").argument("<username>")
+    .action(async (username: string) => {
+      const result = await addUser(username, await readManualPassword());
+      stdout.write(`${JSON.stringify(result)}\n`);
+    });
+  users.command("passwd").argument("<username>")
+    .action(async (username: string) => {
+      await resetUserPassword(username, await readManualPassword());
+      stdout.write(`${JSON.stringify({ username, updated: true })}\n`);
+    });
+  users.command("list")
+    .action(async () => {
+      stdout.write(`${JSON.stringify(await listUsers())}\n`);
+    });
+  users.command("claim-orphans").argument("<username>")
+    .action(async (username: string) => {
+      stdout.write(`${JSON.stringify(await claimOrphans(username))}\n`);
     });
 
   manual

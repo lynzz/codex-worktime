@@ -22,6 +22,27 @@
       "when": 1789270321652,
       "tag": "0002_entries-created-at",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790911527795,
+      "tag": "0003_accounts-nullable",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790911544326,
+      "tag": "0004_accounts-owned",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790911554326,
+      "tag": "0005_reports",
+      "breakpoints": true
     }
   ]
 }

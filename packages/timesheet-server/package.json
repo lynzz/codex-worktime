@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@codex-worktime/report-core": "*",
     "@codex-worktime/timesheet-core": "*",
     "@neondatabase/serverless": "^1.1.0",
     "drizzle-orm": "^0.45.2",

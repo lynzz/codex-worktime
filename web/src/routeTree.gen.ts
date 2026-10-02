@@ -15,6 +15,7 @@ import { Route as HomeRouteImport } from './routes/home'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MonthRouteImport } from './routes/month'
 import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -47,6 +48,11 @@ const ProjectsRoute = ProjectsRouteImport.update({
   path: '/projects',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
   id: '/api/$',
   path: '/api/$',
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/month': typeof MonthRoute
   '/projects': typeof ProjectsRoute
+  '/reports': typeof ReportsRoute
   '/api/$': typeof ApiSplatRoute
 }
 export interface FileRoutesByTo {
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/month': typeof MonthRoute
   '/projects': typeof ProjectsRoute
+  '/reports': typeof ReportsRoute
   '/api/$': typeof ApiSplatRoute
 }
 export interface FileRoutesById {
@@ -79,14 +87,30 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/month': typeof MonthRoute
   '/projects': typeof ProjectsRoute
+  '/reports': typeof ReportsRoute
   '/api/$': typeof ApiSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/data' | '/home' | '/login' | '/month' | '/projects' | '/api/$'
+    | '/'
+    | '/data'
+    | '/home'
+    | '/login'
+    | '/month'
+    | '/projects'
+    | '/reports'
+    | '/api/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/data' | '/home' | '/login' | '/month' | '/projects' | '/api/$'
+  to:
+    | '/'
+    | '/data'
+    | '/home'
+    | '/login'
+    | '/month'
+    | '/projects'
+    | '/reports'
+    | '/api/$'
   id:
     | '__root__'
     | '/'
@@ -95,6 +119,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/month'
     | '/projects'
+    | '/reports'
     | '/api/$'
   fileRoutesById: FileRoutesById
 }
@@ -105,6 +130,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   MonthRoute: typeof MonthRoute
   ProjectsRoute: typeof ProjectsRoute
+  ReportsRoute: typeof ReportsRoute
   ApiSplatRoute: typeof ApiSplatRoute
 }
 
@@ -152,6 +178,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/$': {
       id: '/api/$'
       path: '/api/$'
@@ -169,6 +202,7 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   MonthRoute: MonthRoute,
   ProjectsRoute: ProjectsRoute,
+  ReportsRoute: ReportsRoute,
   ApiSplatRoute: ApiSplatRoute,
 }
 export const routeTree = rootRouteImport

@@ -1,5 +1,6 @@
 import { Hono } from "hono";
-import { and, asc, gte, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
+import { HTTPException } from "hono/http-exception";
 import { getDb, dbConfigured } from "./db.js";
 import { projectsRouter } from "./routes/projects.js";
 import { entriesRouter } from "./routes/entries.js";
@@ -9,14 +10,35 @@ import { importPrototypeTimesheet } from "./import-prototype.js";
 import { importTaskListWorkbook } from "./import-xlsx.js";
 import type { Entry } from "@codex-worktime/timesheet-core";
 import { entries as entriesTable, projects as projectsTable } from "./schema.js";
-import { authMiddleware, loginHandler, logoutHandler } from "./auth.js";
+import { authMiddleware, loginHandler, logoutHandler, meHandler, type AppEnv } from "./auth.js";
+import { createReportsRouter, type ReportCollector } from "./reports.js";
 
-export const api = new Hono();
+export type TimesheetApi = Hono<AppEnv>;
+export function createApi({ reportCollector }: { reportCollector?: ReportCollector } = {}): TimesheetApi {
+const api = new Hono<AppEnv>();
+api.get("/api/health", async (c) => {
+  if (!dbConfigured()) {
+    return c.json({ ok: true, db: "not-configured" });
+  }
+  let last: { error: string; cause?: string } | null = null;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await getDb().execute(sql`select 1`);
+      return c.json({ ok: true, db: "up", attempt });
+    } catch (error) {
+      const cause = (error as Error & { cause?: { code?: string } }).cause;
+      last = { error: (error as Error).message, cause: cause?.code };
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  return c.json({ ok: false, db: "down", ...last }, 500);
+});
 
-// 登录(口令在 ACCESS_PASSWORD secret;未配置则登录页不出现)
+// Health and credential login are the only public endpoints.
 api.post("/api/auth/login", loginHandler);
-api.post("/api/auth/logout", logoutHandler);
 api.use("*", authMiddleware());
+api.get("/api/auth/me", meHandler);
+api.post("/api/auth/logout", logoutHandler);
 
 // 下载空白任务清单模板(与导出/导入同构)
 api.get("/api/import/template", async (c) => {
@@ -39,7 +61,7 @@ api.post("/api/import/xlsx", async (c) => {
   try {
     const body = await c.req.arrayBuffer();
     if (body.byteLength === 0) return c.json({ error: "缺少文件内容" }, 400);
-    const result = await importTaskListWorkbook(body, targetDate);
+    const result = await importTaskListWorkbook(body, targetDate, c.get("userId"));
     return c.json(result, 201);
   } catch (error) {
     return c.json({ error: (error as Error).message }, 400);
@@ -49,9 +71,10 @@ api.post("/api/import/xlsx", async (c) => {
 // 幂等导入(原型 JSON / 本应用导出的 JSON,同一形状):重复导入按 id 跳过
 api.post("/api/import", async (c) => {
   try {
-    const result = await importPrototypeTimesheet(await c.req.json().catch(() => null));
+    const result = await importPrototypeTimesheet(await c.req.json().catch(() => null), c.get("userId"));
     return c.json(result, 201);
   } catch (error) {
+    if (error instanceof HTTPException) return c.json({ error: error.message }, error.status);
     const zod = error as { issues?: { message?: string }[] };
     return c.json(
       { error: zod.issues?.[0]?.message ?? "导入文件结构不符" },
@@ -66,6 +89,7 @@ api.get("/favicon.ico", (c) => c.body(null, 204));
 api.route("/api/projects", projectsRouter);
 api.route("/api/entries", entriesRouter);
 api.route("/api/tasks", tasksRouter);
+api.route("/api", createReportsRouter(reportCollector));
 
 // 导出时间过滤:?month=YYYY-MM 或 ?from=YYYY-MM-DD&to=YYYY-MM-DD;缺省导出全部
 function resolveExportRange(c: { req: { query: (k: string) => string | undefined }; json: (b: unknown, s: 400) => Response }):
@@ -104,15 +128,15 @@ api.get("/api/export/xlsx", async (c) => {
   }
 
   const db = getDb();
-  const conditions = [];
+  const conditions = [eq(entriesTable.userId, c.get("userId"))];
   if (range.from) conditions.push(gte(entriesTable.date, range.from));
   if (range.to) conditions.push(lte(entriesTable.date, range.to));
   const [projects, entries] = await Promise.all([
-    db.select().from(projectsTable).orderBy(asc(projectsTable.name)),
+    db.select().from(projectsTable).where(eq(projectsTable.userId, c.get("userId"))).orderBy(asc(projectsTable.name)),
     db
       .select()
       .from(entriesTable)
-      .where(conditions.length ? and(...conditions) : undefined)
+      .where(and(...conditions))
       .orderBy(asc(entriesTable.date)),
   ]);
   const buffer = await buildTaskListWorkbook(
@@ -125,21 +149,8 @@ api.get("/api/export/xlsx", async (c) => {
   c.header("content-type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
   return c.body(new Uint8Array(buffer));
 });
+return api;
+}
 
-api.get("/api/health", async (c) => {
-  if (!dbConfigured()) {
-    return c.json({ ok: true, db: "not-configured" });
-  }
-  let last: { error: string; cause?: string } | null = null;
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      await getDb().execute(sql`select 1`);
-      return c.json({ ok: true, db: "up", attempt });
-    } catch (error) {
-      const cause = (error as Error & { cause?: { code?: string } }).cause;
-      last = { error: (error as Error).message, cause: cause?.code };
-      await new Promise((r) => setTimeout(r, 500));
-    }
-  }
-  return c.json({ ok: false, db: "down", ...last }, 500);
-});
+export const api = createApi();
+

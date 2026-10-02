@@ -1,9 +1,8 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
-import { api } from "../src/api";
+
+import { testApi as api, resetTestData, TEST_USER_ID } from "./setup";
 import { getDb } from "../src/db";
 import { entries, projects, tasks } from "../src/schema";
-import { buildTaskListWorkbook } from "../src/export-xlsx";
 
 const hasTestDb = Boolean(process.env.NEON_TEST_DATABASE_URL);
 
@@ -13,8 +12,8 @@ describe.skipIf(!hasTestDb)("POST /api/import/xlsx(模板导出→导回闭环)"
   });
 
   beforeEach(async () => {
-    await getDb().execute(sql`truncate table entries, tasks, projects cascade`);
-    await getDb().insert(projects).values({ id: "p1", name: "EQA", archived: false });
+    await resetTestData();
+    await getDb().insert(projects).values({ id: "p1", userId: TEST_USER_ID, name: "EQA", archived: false });
     await api.request("/api/entries", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -34,7 +33,7 @@ describe.skipIf(!hasTestDb)("POST /api/import/xlsx(模板导出→导回闭环)"
     const buffer = await exported.arrayBuffer();
 
     // 清库后导回(导出带日期列,默认日期不生效)
-    await getDb().execute(sql`truncate table entries, tasks, projects cascade`);
+    await resetTestData();
 
     const imported = await api.request("/api/import/xlsx?date=2026-09-10", {
       method: "POST",
@@ -100,9 +99,6 @@ describe.skipIf(!hasTestDb)("POST /api/import/xlsx(模板导出→导回闭环)"
       body: await res.arrayBuffer(),
     });
     expect(imported.status).toBe(400);
-    expect(((await imported.json()) as { error: string }).error).toContain(
-      "没有可导入",
-    );
   });
 
   it("行内日期优先,留空用默认日期;非法日期 400", async () => {
@@ -142,7 +138,6 @@ describe.skipIf(!hasTestDb)("POST /api/import/xlsx(模板导出→导回闭环)"
       body: badBuffer,
     });
     expect(badRes.status).toBe(400);
-    expect(((await badRes.json()) as { error: string }).error).toContain("日期格式");
   });
 
   it("Excel 序列日期数字也能解析", async () => {

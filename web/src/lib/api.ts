@@ -5,8 +5,8 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     headers: { "content-type": "application/json" },
     ...init,
   });
-  if (res.status === 401 && !location.pathname.startsWith("/login")) {
-    location.href = "/login"; // 会话过期 → 登录页
+  if (res.status === 401) {
+    location.replace("/login"); // 会话过期 → 整页导航,清除账号数据缓存
     throw new Error("未登录");
   }
   const body = (await res.json().catch(() => ({}))) as T & { error?: string };

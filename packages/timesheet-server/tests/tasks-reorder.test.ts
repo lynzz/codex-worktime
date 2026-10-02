@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
-import { api } from "../src/api";
+
+import { testApi as api, resetTestData, TEST_USER_ID } from "./setup";
 import { getDb } from "../src/db";
 import { projects, tasks } from "../src/schema";
 import { buildWeekRows } from "@codex-worktime/timesheet-core";
@@ -24,8 +24,8 @@ describe.skipIf(!hasTestDb)("任务行拖动排序", () => {
 
   beforeEach(async () => {
     const db = getDb();
-    await db.execute(sql`truncate table entries, tasks, projects cascade`);
-    await db.insert(projects).values({ id: "p1", name: "EQA", archived: false });
+    await resetTestData();
+    await db.insert(projects).values({ id: "p1", userId: TEST_USER_ID, name: "EQA", archived: false });
     ids = [];
     for (const title of ["任务A", "任务B", "任务C"]) {
       const res = await post("/api/tasks", { projectId: "p1", title });

@@ -2,8 +2,8 @@ import { readFile, readdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { z } from "zod";
-import { monthPeriod } from "@codex-worktime/report-core";
-import { generateProjectReport, projectProfileSchema } from "./generate-project-report.js";
+import { monthPeriod, type ReportSnapshot } from "@codex-worktime/report-core";
+import { collectProjectReportSnapshot, generateProjectReport, projectProfileSchema } from "./generate-project-report.js";
 import { importHistoricalJsonl } from "../history/import-historical-jsonl.js";
 import { importClaudeCodeJsonl } from "../history/import-claude-code-jsonl.js";
 import { importCursorTranscripts } from "../history/import-cursor-transcripts.js";
@@ -19,16 +19,15 @@ async function discoverJsonl(directory: string): Promise<{ paths: string[]; inco
   } catch { return { paths: [], incomplete: true }; }
 }
 
-export async function generateMonthlyReport(input: {
-  profileId: string; month: string; dataDirectory: string; htmlPath: string; jsonPath: string;
+export type MonthlyReportInput = {
+  profileId: string; month: string; dataDirectory: string;
   eventsPath?: string; historyHome?: string; generatedAt?: string;
-}) {
+};
+
+async function readMonthlyReportInput(input: MonthlyReportInput) {
   const profileId = z.string().regex(/^[a-z][a-z0-9_-]*$/).parse(input.profileId);
   const period = monthPeriod(input.month);
   const profilePath = join(input.dataDirectory, "profiles", `${profileId}.json`);
-  for (const path of [input.htmlPath, input.jsonPath]) {
-    if ([profilePath, input.eventsPath].some((source) => source && resolve(path) === resolve(source))) throw new Error("Report output must not overwrite its input files");
-  }
   const profile = projectProfileSchema.parse(JSON.parse(await readFile(profilePath, "utf8")));
   if (profile.id !== profileId) throw new Error("Registered Profile identity mismatch");
   const extraEvents = input.eventsPath ? z.array(z.unknown()).parse(JSON.parse(await readFile(input.eventsPath, "utf8"))) : [];
@@ -52,11 +51,25 @@ export async function generateMonthlyReport(input: {
     "claude-history": claude.hasUnreadableSource || claudeFiles.incomplete || !claudeFiles.paths.length ? "unknown" : "available",
     "cursor-history": cursor.hasUnreadableSource || cursorFiles.some((result) => result.incomplete) || !cursorSources.length ? "unknown" : "available"
   } as const;
-  return generateProjectReport({ profile, events: [...extraEvents, ...codex.events, ...claude.events, ...cursor.events],
+  return { profile, events: [...extraEvents, ...codex.events, ...claude.events, ...cursor.events],
     coverage: mergeCoverage([...codex.coverage, ...claude.coverage, ...cursor.coverage]),
-    sourceStatus, cursorUndated: { scope: "lifetime-not-monthly", sessionCount: cursor.undatedSessionCount,
+    sourceStatus, cursorUndated: { scope: "lifetime-not-monthly" as const, sessionCount: cursor.undatedSessionCount,
       promptCount: cursor.undatedPromptCount, completedTurnCount: cursor.undatedCompletedTurnCount, missingTimestampCount: cursor.missingTimestampCount },
     month: period.month, generatedAt: input.generatedAt,
     databasePath: join(input.dataDirectory, `${profileId}.sqlite`), applicationDataDirectory: input.dataDirectory,
-    htmlPath: input.htmlPath, jsonPath: input.jsonPath });
+  };
+}
+
+/** Collect registered sources and existing SQLite Hook events without HTML/JSON files. */
+export async function collectMonthlyReport(input: MonthlyReportInput): Promise<ReportSnapshot> {
+  return collectProjectReportSnapshot(await readMonthlyReportInput(input));
+}
+
+export async function generateMonthlyReport(input: MonthlyReportInput & { htmlPath: string; jsonPath: string }) {
+  const profileId = z.string().regex(/^[a-z][a-z0-9_-]*$/).parse(input.profileId);
+  const profilePath = join(input.dataDirectory, "profiles", `${profileId}.json`);
+  for (const path of [input.htmlPath, input.jsonPath]) {
+    if ([profilePath, input.eventsPath].some((source) => source && resolve(path) === resolve(source))) throw new Error("Report output must not overwrite its input files");
+  }
+  return generateProjectReport({ ...await readMonthlyReportInput(input), htmlPath: input.htmlPath, jsonPath: input.jsonPath });
 }

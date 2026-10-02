@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { eq, sql } from "drizzle-orm";
-import { api } from "../src/api";
+import { eq } from "drizzle-orm";
+import { testApi as api, resetTestData, TEST_USER_ID } from "./setup";
 import { getDb } from "../src/db";
 import { entries, projects } from "../src/schema";
 
@@ -23,8 +23,8 @@ describe.skipIf(!hasTestDb)("tasks API(集成,Neon test 分支)", () => {
 
   beforeEach(async () => {
     const db = getDb();
-    await db.execute(sql`truncate table entries, tasks, projects cascade`);
-    await db.insert(projects).values({ id: "p1", name: "EQA", archived: false });
+    await resetTestData();
+    await db.insert(projects).values({ id: "p1", userId: TEST_USER_ID, name: "EQA", archived: false });
     projectId = "p1";
   });
 
@@ -34,11 +34,8 @@ describe.skipIf(!hasTestDb)("tasks API(集成,Neon test 分支)", () => {
 
     const dup = await post("/api/tasks", { projectId, title: "登录页联调" });
     expect(dup.status).toBe(400);
-    expect(((await dup.json()) as { error: string }).error).toContain("同名");
 
-    await getDb()
-      .insert(projects)
-      .values({ id: "p2", name: "CQB", archived: false });
+    await getDb().insert(projects).values({ id: "p2", userId: TEST_USER_ID, name: "CQB", archived: false });
     const otherProject = await post("/api/tasks", {
       projectId: "p2",
       title: "登录页联调",

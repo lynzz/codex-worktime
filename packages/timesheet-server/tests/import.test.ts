@@ -1,6 +1,6 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { sql } from "drizzle-orm";
-import { api } from "../src/api";
+
+import { testApi as api, resetTestData } from "./setup";
 import { getDb } from "../src/db";
 import { entries } from "../src/schema";
 
@@ -29,7 +29,7 @@ describe.skipIf(!hasTestDb)("POST /api/import(幂等导入)", () => {
   });
 
   beforeEach(async () => {
-    await getDb().execute(sql`truncate table entries, tasks, projects cascade`);
+    await resetTestData();
   });
 
   it("首次导入写入;重复导入全部跳过;数据一致", async () => {

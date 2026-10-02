@@ -1,19 +1,21 @@
 import { Hono } from "hono";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { getDb } from "../db.js";
 import { entries, projects, tasks } from "../schema.js";
+import type { AppEnv } from "../auth.js";
 import {
   taskCreateSchema,
   taskPatchSchema,
   type Task,
 } from "@codex-worktime/timesheet-core";
 
-export const tasksRouter = new Hono();
+export const tasksRouter = new Hono<AppEnv>();
 
 tasksRouter.get("/", async (c) => {
   const rows = await getDb()
     .select()
     .from(tasks)
+    .where(eq(tasks.userId, c.get("userId")))
     .orderBy(asc(tasks.title));
   return c.json(rows satisfies Task[]);
 });
@@ -27,25 +29,27 @@ tasksRouter.post("/", async (c) => {
   const [project] = await db
     .select()
     .from(projects)
-    .where(eq(projects.id, parsed.data.projectId));
+    .where(and(eq(projects.id, parsed.data.projectId), eq(projects.userId, c.get("userId"))));
   if (!project) return c.json({ error: "项目不存在" }, 404);
 
   const existing = await db
     .select()
     .from(tasks)
-    .where(eq(tasks.projectId, parsed.data.projectId));
+    .where(and(eq(tasks.projectId, parsed.data.projectId), eq(tasks.userId, c.get("userId"))));
   if (existing.some((t) => t.title === parsed.data.title)) {
     return c.json({ error: "该项目下已存在同名任务行" }, 400);
   }
 
   const maxPosRows = await db
     .select({ value: sql<number>`coalesce(max(${tasks.position}), -1)` })
-    .from(tasks);
+    .from(tasks)
+    .where(eq(tasks.userId, c.get("userId")));
   const maxPos = maxPosRows[0]?.value ?? -1;
   const rows = await db
     .insert(tasks)
     .values({
       id: crypto.randomUUID(),
+      userId: c.get("userId"),
       projectId: parsed.data.projectId,
       title: parsed.data.title,
       position: Number(maxPos) + 1,
@@ -64,16 +68,16 @@ tasksRouter.post("/reorder", async (c) => {
     return c.json({ error: "ids 应为非空数组" }, 400);
   }
   const db = getDb();
-  const existing = await db.select().from(tasks);
+  const userId = c.get("userId");
+  const existing = await db.select().from(tasks).where(eq(tasks.userId, userId));
   const known = new Set(existing.map((t) => t.id));
   if (!ids.every((id) => known.has(id))) {
     return c.json({ error: "ids 中包含不存在的任务行" }, 404);
   }
-  await db.transaction(async (tx) => {
-    for (let i = 0; i < ids.length; i++) {
-      await tx.update(tasks).set({ position: i }).where(eq(tasks.id, ids[i]!));
-    }
-  });
+  const updates = ids.map((id, position) =>
+    db.update(tasks).set({ position }).where(and(eq(tasks.id, id), eq(tasks.userId, userId))),
+  );
+  await db.batch([updates[0]!, ...updates.slice(1)]);
   return c.json({ ok: true, count: ids.length });
 });
 
@@ -85,13 +89,13 @@ tasksRouter.patch("/:id", async (c) => {
   }
   const db = getDb();
   const id = c.req.param("id");
-  const [existing] = await db.select().from(tasks).where(eq(tasks.id, id));
+  const [existing] = await db.select().from(tasks).where(and(eq(tasks.id, id), eq(tasks.userId, c.get("userId"))));
   if (!existing) return c.json({ error: "任务行不存在" }, 404);
 
   const siblings = await db
     .select()
     .from(tasks)
-    .where(eq(tasks.projectId, existing.projectId));
+    .where(and(eq(tasks.projectId, existing.projectId), eq(tasks.userId, c.get("userId"))));
   if (
     siblings.some((t) => t.id !== id && t.title === parsed.data!.title)
   ) {
@@ -101,7 +105,7 @@ tasksRouter.patch("/:id", async (c) => {
   const updated = await db
     .update(tasks)
     .set({ title: parsed.data!.title })
-    .where(eq(tasks.id, id))
+    .where(and(eq(tasks.id, id), eq(tasks.userId, c.get("userId"))))
     .returning();
   const row = updated[0];
   if (!row) return c.json({ error: "任务行不存在" }, 404);
@@ -112,8 +116,12 @@ tasksRouter.patch("/:id", async (c) => {
 tasksRouter.delete("/:id", async (c) => {
   const db = getDb();
   const id = c.req.param("id");
-  const deleted = await db.delete(tasks).where(eq(tasks.id, id)).returning();
-  if (!deleted[0]) return c.json({ error: "任务行不存在" }, 404);
-  await db.update(entries).set({ taskId: null }).where(eq(entries.taskId, id));
+  const userId = c.get("userId");
+  const [task] = await db.select().from(tasks).where(and(eq(tasks.id, id), eq(tasks.userId, userId)));
+  if (!task) return c.json({ error: "任务行不存在" }, 404);
+  await db.batch([
+    db.update(entries).set({ taskId: null }).where(and(eq(entries.taskId, id), eq(entries.userId, userId))),
+    db.delete(tasks).where(and(eq(tasks.id, id), eq(tasks.userId, userId))),
+  ]);
   return c.json({ ok: true });
 });

@@ -1,14 +1,15 @@
 import { Hono } from "hono";
-import { count, eq, sql } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { getDb } from "../db.js";
 import { entries, projects, tasks } from "../schema.js";
+import type { AppEnv } from "../auth.js";
 import {
   projectCreateSchema,
   projectPatchSchema,
   type Project,
 } from "@codex-worktime/timesheet-core";
 
-export const projectsRouter = new Hono();
+export const projectsRouter = new Hono<AppEnv>();
 
 // 一键清空人工工时域(spec #11 用户故事 19):要求显式确认串,防误触
 projectsRouter.post("/reset", async (c) => {
@@ -16,7 +17,13 @@ projectsRouter.post("/reset", async (c) => {
   if (body.confirm !== "CLEAR_MANUAL_DATA") {
     return c.json({ error: "清空需要 confirm: CLEAR_MANUAL_DATA" }, 400);
   }
-  await getDb().execute(sql`truncate table entries, tasks, projects cascade`);
+  const db = getDb();
+  const userId = c.get("userId");
+  await db.batch([
+    db.delete(entries).where(eq(entries.userId, userId)),
+    db.delete(tasks).where(eq(tasks.userId, userId)),
+    db.delete(projects).where(eq(projects.userId, userId)),
+  ]);
   return c.json({ ok: true });
 });
 
@@ -28,6 +35,7 @@ projectsRouter.get("/", async (c) => {
   const rows = await getDb()
     .select()
     .from(projects)
+    .where(eq(projects.userId, c.get("userId")))
     .orderBy(projects.name);
   return c.json(rows satisfies Project[]);
 });
@@ -39,7 +47,7 @@ projectsRouter.post("/", async (c) => {
   }
   const rows = await getDb()
     .insert(projects)
-    .values({ id: crypto.randomUUID(), name: parsed.data.name })
+    .values({ id: crypto.randomUUID(), userId: c.get("userId"), name: parsed.data.name })
     .returning();
   const row = rows[0];
   if (!row) return c.json({ error: "创建失败" }, 500);
@@ -54,7 +62,7 @@ projectsRouter.patch("/:id", async (c) => {
   const updated = await getDb()
     .update(projects)
     .set(parsed.data)
-    .where(eq(projects.id, c.req.param("id")))
+    .where(and(eq(projects.id, c.req.param("id")), eq(projects.userId, c.get("userId"))))
     .returning();
   const row = updated[0];
   if (!row) return c.json({ error: "项目不存在" }, 404);
@@ -64,17 +72,20 @@ projectsRouter.patch("/:id", async (c) => {
 projectsRouter.delete("/:id", async (c) => {
   const id = c.req.param("id");
   const db = getDb();
-  const [row] = await db.select().from(projects).where(eq(projects.id, id));
+  const userId = c.get("userId");
+  const [row] = await db.select().from(projects).where(and(eq(projects.id, id), eq(projects.userId, userId)));
   if (!row) return c.json({ error: "项目不存在" }, 404);
   const counts = await db
     .select({ value: count() })
     .from(entries)
-    .where(eq(entries.projectId, id));
+    .where(and(eq(entries.projectId, id), eq(entries.userId, userId)));
   if ((counts[0]?.value ?? 0) > 0) {
     return c.json({ error: "项目仍有工时记录,不能删除,请改用归档" }, 409);
   }
   // 无工时记录时可删:任务行只是配置,随项目一并清理
-  await db.delete(tasks).where(eq(tasks.projectId, id));
-  await db.delete(projects).where(eq(projects.id, id));
+  await db.batch([
+    db.delete(tasks).where(and(eq(tasks.projectId, id), eq(tasks.userId, userId))),
+    db.delete(projects).where(and(eq(projects.id, id), eq(projects.userId, userId))),
+  ]);
   return c.json({ ok: true });
 });
